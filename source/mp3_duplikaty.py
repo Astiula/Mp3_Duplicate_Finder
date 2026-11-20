@@ -24,7 +24,7 @@ wynikającymi z bezwzględnie obowiązujących przepisów.
 KOMPONENTY ZEWNĘTRZNE
 • FFmpeg — GPL-3.0-or-later (konkretna kompilacja Windows essentials
   od Gyan Doshi; warunki i źródła: https://www.gyan.dev/ffmpeg/builds/)
-• Chromaprint / fpcalc — LGPL-2.1-or-later
+• Chromaprint / fpcalc — LGPL-2.1
   https://github.com/acoustid/chromaprint
 
 FFmpeg i Chromaprint są odrębnymi projektami. Ich licencje dotyczą
