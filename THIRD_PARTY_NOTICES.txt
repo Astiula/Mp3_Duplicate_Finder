@@ -1,0 +1,18 @@
+THIRD-PARTY NOTICES
+
+FFmpeg — Windows essentials build by Gyan Doshi
+License: GPLv3 (as identified by the distributor for its static Windows builds).
+Builds and source/build information: https://www.gyan.dev/ffmpeg/builds/
+FFmpeg legal information: https://ffmpeg.org/legal.html
+
+Chromaprint / fpcalc 1.6.1
+License: LGPL-2.1; Chromaprint's source also includes MIT-licensed portions.
+Release: https://github.com/acoustid/chromaprint/releases/tag/v1.6.1
+License text: https://github.com/acoustid/chromaprint/blob/v1.6.1/LICENSE.md
+
+Application source attribution:
+Copyright © 2026 Konrad Astachow (Kondar), as declared by the author.
+
+FFmpeg and Chromaprint are independent third-party projects. Their respective
+licenses apply to those components. This notice is informational and is not
+legal advice.
