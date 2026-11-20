@@ -358,13 +358,12 @@ class App:
             for i in range(len(items)):
                 for j in range(i + 1, len(items)):
                     a, b = items[i], items[j]
-                    if a["hash"] == b["hash"]:
-                        continue
-                    score = fingerprint_similarity(a["fp"], b["fp"])
-                    if score >= threshold:
-                        output.append((a, f"Podobny utwór ↔ {b['path'].name}", f"{score * 100:.1f}%"))
-                        output.append((b, f"Podobny utwór ↔ {a['path'].name}", f"{score * 100:.1f}%"))
                     checked += 1
+                    if a["hash"] != b["hash"]:
+                        score = fingerprint_similarity(a["fp"], b["fp"])
+                        if score >= threshold:
+                            output.append((a, f"Podobny utwór ↔ {b['path'].name}", f"{score * 100:.1f}%"))
+                            output.append((b, f"Podobny utwór ↔ {a['path'].name}", f"{score * 100:.1f}%"))
                     if checked % 100 == 0 or checked == total_pairs:
                         self.events.put(("compare_progress", checked, total_pairs, len(files)))
             self.events.put(("done", output, len(files), len(items), None))
