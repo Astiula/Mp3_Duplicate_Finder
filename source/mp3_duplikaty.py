@@ -217,10 +217,15 @@ class App:
         ttk.Button(footer, text="Otwórz lokalizację", command=self.open_location, style="Secondary.TButton").pack(side="left")
         ttk.Button(footer, text="Przenieś zaznaczone do „Duplikaty”", command=self.move_selected,
                    style="Danger.TButton").pack(side="left", padx=8)
-        self.progress = ttk.Progressbar(footer, mode="indeterminate", length=150)
-        self.progress.pack(side="right", padx=(10, 0))
-        self.status_label = ttk.Label(self.main, textvariable=self.status, style="Status.TLabel", anchor="w")
-        self.status_label.pack(fill="x", pady=(10, 0))
+        statusbar = ttk.Frame(self.main, style="App.TFrame")
+        statusbar.pack(fill="x", pady=(10, 0))
+        self.status_label = ttk.Label(statusbar, textvariable=self.status, style="Status.TLabel", anchor="w")
+        self.status_label.pack(side="left", fill="x", expand=True)
+        self.scan_counts = tk.StringVar(value="Znalezione pliki: 0  |  Przeskanowane: 0/0")
+        self.counts_label = ttk.Label(statusbar, textvariable=self.scan_counts, style="Status.TLabel", anchor="e")
+        self.counts_label.pack(side="right", padx=(10, 10))
+        self.progress = ttk.Progressbar(statusbar, mode="determinate", length=125, maximum=1)
+        self.progress.pack(side="right")
 
     def apply_theme(self):
         p = self.PALETTES[self.theme_name]
@@ -313,7 +318,9 @@ class App:
                                  ". Umieść pliki obok programu lub sprawdź paczkę instalacyjną.")
             return
         self.scan_btn.configure(state="disabled")
-        self.progress.start(12)
+        self.progress.configure(mode="determinate", maximum=1, value=0)
+        self.scan_counts.set("Znalezione pliki: 0  |  Przeskanowane: 0/0")
+        self.status.set("Wyszukiwanie plików MP3…")
         self.tree.delete(*self.tree.get_children())
         self.results = []
         self.count_label.configure(text="Analiza w toku…")
@@ -324,6 +331,7 @@ class App:
     def _scan_worker(self, folder, ffmpeg, fpcalc, threshold):
         try:
             files = sorted(p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() == ".mp3")
+            self.events.put(("progress_init", len(files)))
             self.events.put(("status", f"Znaleziono {len(files)} plików MP3. Obliczanie odcisków audio…"))
             items = []
             for i, path in enumerate(files, 1):
@@ -335,7 +343,7 @@ class App:
                                   "size": path.stat().st_size})
                 except Exception as exc:
                     self.events.put(("status", f"Pominięto {path.name}: {exc}"))
-                self.events.put(("status", f"Analiza plików: {i}/{len(files)}"))
+                self.events.put(("progress", "Skanowanie plików", i, len(files)))
             by_hash = {}
             for item in items:
                 by_hash.setdefault(item["hash"], []).append(item)
@@ -346,6 +354,7 @@ class App:
                         output.append((item, "Identyczna zawartość audio", "100.0%"))
             total_pairs = len(items) * (len(items) - 1) // 2
             checked = 0
+            self.events.put(("compare_init", total_pairs, len(files)))
             for i in range(len(items)):
                 for j in range(i + 1, len(items)):
                     a, b = items[i], items[j]
@@ -356,8 +365,8 @@ class App:
                         output.append((a, f"Podobny utwór ↔ {b['path'].name}", f"{score * 100:.1f}%"))
                         output.append((b, f"Podobny utwór ↔ {a['path'].name}", f"{score * 100:.1f}%"))
                     checked += 1
-                    if checked % 100 == 0:
-                        self.events.put(("status", f"Porównywanie odcisków: {checked}/{total_pairs} par"))
+                    if checked % 100 == 0 or checked == total_pairs:
+                        self.events.put(("compare_progress", checked, total_pairs, len(files)))
             self.events.put(("done", output, len(files), len(items), None))
         except Exception as exc:
             self.events.put(("done", [], 0, 0, str(exc)))
@@ -368,12 +377,32 @@ class App:
                 msg = self.events.get_nowait()
                 if msg[0] == "status":
                     self.status.set(msg[1])
+                elif msg[0] == "progress_init":
+                    total = msg[1]
+                    self.progress.configure(maximum=max(total, 1), value=0)
+                    self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: 0/{total}")
+                elif msg[0] == "progress":
+                    _, stage, current, total = msg
+                    self.progress.configure(mode="determinate", maximum=max(total, 1), value=current)
+                    self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: {current}/{total}")
+                    self.status.set(f"{stage}…")
+                elif msg[0] == "compare_init":
+                    _, total_pairs, scanned = msg
+                    self.progress.configure(mode="determinate", maximum=max(total_pairs, 1), value=0)
+                    self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: {scanned}/{scanned}")
+                    self.status.set("Porównywanie odcisków audio…")
+                elif msg[0] == "compare_progress":
+                    _, current, total_pairs, scanned = msg
+                    self.progress.configure(maximum=max(total_pairs, 1), value=current)
+                    self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: {scanned}/{scanned}")
+                    self.status.set(f"Porównywanie odcisków: {current}/{total_pairs} par")
                 elif msg[0] == "done":
                     _, rows, total, ok, error = msg
-                    self.progress.stop()
+                    self.progress.configure(value=0)
                     self.scan_btn.configure(state="normal")
                     if error:
                         self.count_label.configure(text="Błąd analizy")
+                        self.scan_counts.set("Znalezione pliki: 0  |  Przeskanowane: 0/0")
                         self.status.set("Wystąpił błąd podczas analizy.")
                         messagebox.showerror(APP_TITLE, error)
                         continue
@@ -387,9 +416,11 @@ class App:
                         self.tree.insert("", "end", values=(kind, score,
                             f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])))
                     self.count_label.configure(text=f"{len(seen)} wyników")
-                    self.status.set(f"Zakończono. Przeanalizowano {ok} z {total} plików MP3. Sprawdź wyniki przed przenoszeniem.")
+                    found_files = len({str(item["path"]) for item, _, _ in rows})
+                    self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
+                    self.status.set("Zakończono. Sprawdź wyniki przed przenoszeniem.")
                     if not seen:
-                        self.status.set(f"Zakończono. Nie znaleziono dopasowań. Przeanalizowano {ok} plików.")
+                        self.status.set("Zakończono. Nie znaleziono dopasowań.")
         except queue.Empty:
             pass
         self.root.after(100, self._poll)
