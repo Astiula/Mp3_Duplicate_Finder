@@ -82,16 +82,38 @@ jobs:
           FFmpeg Windows essentials build by Gyan Doshi
           Distribution page: https://www.gyan.dev/ffmpeg/builds/
           Build archive: ffmpeg-release-essentials.zip
-          The Gyan essentials build is GPLv3; consult its accompanying license and source/build information.
+          The Gyan essentials build is GPLv3. Build/source details: https://www.gyan.dev/ffmpeg/builds/
+          FFmpeg legal information: https://ffmpeg.org/legal.html
 
           Chromaprint / fpcalc 1.6.1
           Project: https://github.com/acoustid/chromaprint
-          License: LGPL-2.1-or-later
+          License: LGPL-2.1 (Chromaprint source also includes MIT-licensed portions)
+          License text: https://github.com/acoustid/chromaprint/blob/v1.6.1/LICENSE.md
           Release: https://github.com/acoustid/chromaprint/releases/tag/v1.6.1
 
-          Application source attribution:
-          Konrad Astachow (Kondar), as declared by the author.
+          Application source:
+          Copyright © 2026 Konrad Astachow (Kondar), all rights reserved.
+          Application source is proprietary; this notice does not change the
+          separate licenses applicable to FFmpeg and Chromaprint.
           '@ | Set-Content -Encoding utf8 "mp3_duplikaty_paczka/THIRD_PARTY_NOTICES.txt"
+
+      - name: Include Chromaprint license and app notice
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://raw.githubusercontent.com/acoustid/chromaprint/v1.6.1/LICENSE.md" -OutFile "mp3_duplikaty_paczka/CHROMAPRINT_LICENSE.txt"
+          @'
+          Mp3 Duplicate Finder
+          Copyright © 2026 Konrad Astachow (Kondar). All rights reserved.
+
+          The application source is proprietary. No open-source license is
+          granted for the application source by this notice.
+
+          Third-party components are separately licensed:
+          - FFmpeg Windows essentials build: GPLv3
+          - Chromaprint / fpcalc 1.6.1: LGPL-2.1, with MIT-licensed portions
+          See THIRD_PARTY_NOTICES.txt and the accompanying component license
+          files for details.
+          '@ | Set-Content -Encoding utf8 "mp3_duplikaty_paczka/APP_LICENSE.txt"
 
       - name: Install build dependencies
         run: python -m pip install --upgrade pip pyinstaller
@@ -119,5 +141,7 @@ jobs:
             mp3_duplikaty_paczka/README.txt
             mp3_duplikaty_paczka/THIRD_PARTY_NOTICES.txt
             mp3_duplikaty_paczka/FFMPEG_LICENSE.txt
+            mp3_duplikaty_paczka/CHROMAPRINT_LICENSE.txt
+            mp3_duplikaty_paczka/APP_LICENSE.txt
           if-no-files-found: warn
           retention-days: 30
