@@ -39,9 +39,12 @@ jobs:
           4. Kliknij Skanuj MP3.
           5. Zaznacz wyniki do przeniesienia lub wyeksportuj raport CSV.
 
-          Program nie usuwa plików automatycznie. Przenoszenie wymaga
-          zaznaczenia plików i potwierdzenia. Wyniki podobieństwa należy
-          zweryfikować przed przeniesieniem.
+          Program ma jasny i ciemny motyw (wybor zapamietywany automatycznie)
+          oraz okno O programie z informacja o autorze i licencjach.
+
+          Program nie usuwa plikow automatycznie. Przenoszenie wymaga
+          zaznaczenia plikow i potwierdzenia. Wyniki podobienstwa nalezy
+          zweryfikowac przed przeniesieniem.
           '@ | Set-Content -Encoding utf8 "mp3_duplikaty_paczka/README.txt"
 
       - name: Download and verify Chromaprint fpcalc
