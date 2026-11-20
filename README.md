@@ -1,18 +1,20 @@
 # Mp3 Duplicate Finder
 
-Windows desktop application for finding identical MP3 audio and likely re-encoded copies using Chromaprint fingerprints.
+Aplikacja desktopowa dla Windows 10/11 do wyszukiwania identycznych plików MP3 oraz podobnych nagrań po ponownym kodowaniu, z wykorzystaniem Chromaprint/audio fingerprint.
 
-## Build
+## Kompilacja
 
-The GitHub Actions workflow builds a Windows x64 one-file executable and publishes it as a downloadable workflow artifact. It obtains FFmpeg and Chromaprint from their upstream distribution channels during the build; these tools are not bundled into this source archive.
+Repozytorium zawiera kod źródłowy i workflow GitHub Actions budujący jednoplikowy program Windows x64. Workflow pobiera FFmpeg i Chromaprint z ich kanałów dystrybucji, weryfikuje sumę SHA-256 Chromaprint, a następnie dołącza oba programy do EXE przez PyInstaller.
 
-## Attribution
+Gotowy plik jest publikowany jako artefakt GitHub Actions: **Mp3_Duplicate_Finder-Windows-x64**.
 
-Project concept and application source: **Konrad Astachow (Kondar)**, as declared by the author.
+## Autorstwo
 
-## Third-party components
+Autorstwo projektu i kodu aplikacji: **Konrad Astachow (Kondar)** — zgodnie z deklaracją autora.
 
-- FFmpeg: https://ffmpeg.org/ — see the license and notices distributed with the selected Windows build.
+## Komponenty zewnętrzne
+
+- FFmpeg: https://ffmpeg.org/ — build Windows essentials od Gyan Doshi; build essentials jest dystrybuowany na licencji GPLv3. Zob. https://www.gyan.dev/ffmpeg/builds/
 - Chromaprint / fpcalc: https://github.com/acoustid/chromaprint — LGPL-2.1-or-later.
 
-This repository does not grant an additional license to the project source code. No open-source license is provided.
+Repozytorium nie zawiera licencji open-source udzielającej dodatkowych praw do kodu aplikacji. Brak pliku LICENSE oznacza, że nie udzielono ogólnej licencji na ponowne wykorzystanie kodu.
