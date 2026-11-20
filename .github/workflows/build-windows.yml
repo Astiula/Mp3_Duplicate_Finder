@@ -69,9 +69,9 @@ jobs:
           $ff = Get-ChildItem ffmpeg_extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
           if (!$ff) { throw "ffmpeg.exe not found" }
           Copy-Item $ff.FullName "mp3_duplikaty_paczka/ffmpeg.exe"
-          $lic = Get-ChildItem $ff.Directory.FullName -Filter "LICENSE*" | Select-Object -First 1
+          $lic = Get-ChildItem ffmpeg_extract -Filter "LICENSE*" -Recurse | Select-Object -First 1
           if ($lic) { Copy-Item $lic.FullName "mp3_duplikaty_paczka/FFMPEG_LICENSE.txt" }
-          else { Invoke-WebRequest -Uri "https://www.gnu.org/licenses/gpl-3.0.txt" -OutFile "mp3_duplikaty_paczka/GPL-3.0.txt" }
+          else { Invoke-WebRequest -Uri "https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/COPYING.GPLv3" -OutFile "mp3_duplikaty_paczka/FFMPEG_LICENSE.txt" }
 
       - name: Add third-party notices
         shell: pwsh
@@ -119,6 +119,5 @@ jobs:
             mp3_duplikaty_paczka/README.txt
             mp3_duplikaty_paczka/THIRD_PARTY_NOTICES.txt
             mp3_duplikaty_paczka/FFMPEG_LICENSE.txt
-            mp3_duplikaty_paczka/GPL-3.0.txt
           if-no-files-found: warn
           retention-days: 30
