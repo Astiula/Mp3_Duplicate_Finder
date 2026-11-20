@@ -20,16 +20,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Set up 7-Zip
-        uses: milliewt/setup-7zip@v1
-
       - name: Extract project source
         shell: pwsh
         run: |
           Expand-Archive -Path "source/MP3_Duplikaty_paczka.zip" -DestinationPath .
           if (!(Test-Path "mp3_duplikaty_paczka/mp3_duplikaty.py")) { throw "Missing application source" }
 
-      - name: Download Chromaprint fpcalc
+      - name: Download and verify Chromaprint fpcalc
         shell: pwsh
         run: |
           $url = "https://github.com/acoustid/chromaprint/releases/download/v1.6.1/chromaprint-fpcalc-1.6.1-windows-x86_64.zip"
@@ -41,16 +38,42 @@ jobs:
           if (!$fp) { throw "fpcalc.exe not found" }
           Copy-Item $fp.FullName "mp3_duplikaty_paczka/fpcalc.exe"
 
-      - name: Download FFmpeg
+      - name: Download and verify FFmpeg
         shell: pwsh
         run: |
-          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.7z"
-          Invoke-WebRequest -Uri $url -OutFile ffmpeg.7z
-          7z x ffmpeg.7z -offmpeg_extract -y | Out-Null
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Invoke-WebRequest -Uri "$url.sha256" -OutFile ffmpeg.sha256
+          $expected = ((Get-Content ffmpeg.sha256 -Raw).Trim() -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) { throw "FFmpeg checksum mismatch" }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract
           $ff = Get-ChildItem ffmpeg_extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
           if (!$ff) { throw "ffmpeg.exe not found" }
           Copy-Item $ff.FullName "mp3_duplikaty_paczka/ffmpeg.exe"
-          Copy-Item (Join-Path $ff.Directory.FullName "LICENSE.txt") "mp3_duplikaty_paczka/FFMPEG_LICENSE.txt" -ErrorAction SilentlyContinue
+          $lic = Get-ChildItem $ff.Directory.FullName -Filter "LICENSE*" | Select-Object -First 1
+          if ($lic) { Copy-Item $lic.FullName "mp3_duplikaty_paczka/FFMPEG_LICENSE.txt" }
+          else { Invoke-WebRequest -Uri "https://www.gnu.org/licenses/gpl-3.0.txt" -OutFile "mp3_duplikaty_paczka/GPL-3.0.txt" }
+
+      - name: Add third-party notices
+        shell: pwsh
+        run: |
+          @'
+          Third-party components included in the Windows build:
+
+          FFmpeg Windows essentials build by Gyan Doshi
+          Distribution page: https://www.gyan.dev/ffmpeg/builds/
+          Build archive: ffmpeg-release-essentials.zip
+          The Gyan essentials build is GPLv3. Review its accompanying license and source/build information.
+
+          Chromaprint / fpcalc 1.6.1
+          Project: https://github.com/acoustid/chromaprint
+          License: LGPL-2.1-or-later
+          Release: https://github.com/acoustid/chromaprint/releases/tag/v1.6.1
+
+          Application source attribution:
+          Konrad Astachow (Kondar), as declared by the author.
+          '@ | Set-Content -Encoding utf8 "mp3_duplikaty_paczka/THIRD_PARTY_NOTICES.txt"
 
       - name: Install build dependencies
         run: python -m pip install --upgrade pip pyinstaller
@@ -62,20 +85,22 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name Mp3_Duplicate_Finder --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
           if (!(Test-Path "dist/Mp3_Duplicate_Finder.exe")) { throw "EXE build failed" }
 
-      - name: Smoke test executable
+      - name: Check executable output
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
         run: |
           $exe = Resolve-Path "dist/Mp3_Duplicate_Finder.exe"
           if ((Get-Item $exe).Length -lt 1000000) { throw "Executable unexpectedly small" }
 
-      - name: Upload executable
+      - name: Upload executable and notices
         uses: actions/upload-artifact@v4
         with:
           name: Mp3_Duplicate_Finder-Windows-x64
           path: |
             mp3_duplikaty_paczka/dist/Mp3_Duplicate_Finder.exe
             mp3_duplikaty_paczka/README.txt
+            mp3_duplikaty_paczka/THIRD_PARTY_NOTICES.txt
             mp3_duplikaty_paczka/FFMPEG_LICENSE.txt
+            mp3_duplikaty_paczka/GPL-3.0.txt
           if-no-files-found: warn
           retention-days: 30
