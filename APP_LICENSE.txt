@@ -1,0 +1,10 @@
+Mp3 Duplicate Finder
+Copyright © 2026 Konrad Astachow (Kondar). All rights reserved.
+
+Kod źródłowy aplikacji jest własnościowy. Nie udziela się licencji open-source
+na kopiowanie, modyfikowanie, sublicencjonowanie ani redystrybucję kodu
+aplikacji, z zastrzeżeniem praw wynikających z bezwzględnie obowiązujących
+przepisów prawa.
+
+To zastrzeżenie dotyczy wyłącznie kodu aplikacji. Nie zmienia ani nie ogranicza
+licencji komponentów zewnętrznych dołączanych do paczki programu.
