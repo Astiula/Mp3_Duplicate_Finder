@@ -20,11 +20,29 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Extract project source
+      - name: Prepare source
         shell: pwsh
         run: |
-          Expand-Archive -Path "source/MP3_Duplikaty_paczka.zip" -DestinationPath .
-          if (!(Test-Path "mp3_duplikaty_paczka/mp3_duplikaty.py")) { throw "Missing application source" }
+          New-Item -ItemType Directory -Force "mp3_duplikaty_paczka" | Out-Null
+          Copy-Item "source/mp3_duplikaty.py" "mp3_duplikaty_paczka/mp3_duplikaty.py"
+          @'
+          MP3 DUPLIKATY - instrukcja
+          ==========================
+
+          Program dla Windows 10/11 do wyszukiwania identycznych plików MP3 i
+          podobnych nagrań po ponownym kodowaniu z użyciem Chromaprint.
+
+          Użycie:
+          1. Uruchom Mp3_Duplicate_Finder.exe.
+          2. Wybierz folder z muzyką.
+          3. Ustaw próg zgodności fingerprintu (domyślnie 0.82).
+          4. Kliknij Skanuj MP3.
+          5. Zaznacz wyniki do przeniesienia lub wyeksportuj raport CSV.
+
+          Program nie usuwa plików automatycznie. Przenoszenie wymaga
+          zaznaczenia plików i potwierdzenia. Wyniki podobieństwa należy
+          zweryfikować przed przeniesieniem.
+          '@ | Set-Content -Encoding utf8 "mp3_duplikaty_paczka/README.txt"
 
       - name: Download and verify Chromaprint fpcalc
         shell: pwsh
@@ -64,7 +82,7 @@ jobs:
           FFmpeg Windows essentials build by Gyan Doshi
           Distribution page: https://www.gyan.dev/ffmpeg/builds/
           Build archive: ffmpeg-release-essentials.zip
-          The Gyan essentials build is GPLv3. Review its accompanying license and source/build information.
+          The Gyan essentials build is GPLv3; consult its accompanying license and source/build information.
 
           Chromaprint / fpcalc 1.6.1
           Project: https://github.com/acoustid/chromaprint
