@@ -99,6 +99,20 @@ def chromaprint_signature(path, fpcalc, cancel_event):
     return duration, fingerprint
 
 
+def read_id3_tags(path):
+    try:
+        from mutagen.mp3 import MP3
+        tags = MP3(path).tags or {}
+        result = {}
+        for key in ("TIT2", "TPE1", "TALB", "TRCK", "TDRC", "TCON"):
+            value = tags.get(key)
+            if value:
+                result[key] = str(value).strip().casefold()
+        return result
+    except Exception:
+        return {}
+
+
 def comparison_notes(a, b):
     notes = []
     if a.get("size") == b.get("size"):
@@ -106,6 +120,12 @@ def comparison_notes(a, b):
     da, db = a.get("fp", (0, []))[0], b.get("fp", (0, []))[0]
     if da and db and abs(da - db) <= 2:
         notes.append("czas trwania ±2 s")
+    tag_labels = (("TIT2", "tytuł"), ("TPE1", "wykonawca"), ("TALB", "album"),
+                  ("TRCK", "numer utworu"), ("TDRC", "rok"), ("TCON", "gatunek"))
+    for key, label in tag_labels:
+        va, vb = a.get("tags", {}).get(key), b.get("tags", {}).get(key)
+        if va and vb and va == vb:
+            notes.append("ten sam " + label)
     return ", ".join(notes)
 
 
@@ -395,7 +415,7 @@ class App:
                     audio_hash = hashlib.sha256(decoded).hexdigest()
                     fingerprint = chromaprint_signature(path, fpcalc, self.cancel_event)
                     items.append({"path": path, "hash": audio_hash, "fp": fingerprint,
-                                  "size": path.stat().st_size})
+                                  "size": path.stat().st_size, "tags": read_id3_tags(path)})
                 except Exception as exc:
                     self.events.put(("status", f"Pominięto {path.name}: {exc}"))
                 self.events.put(("progress", "Skanowanie plików", i, len(files)))
