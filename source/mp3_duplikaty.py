@@ -7,7 +7,13 @@ import threading
 import queue
 import shutil
 import csv
+import tempfile
 from pathlib import Path
+
+try:
+    import winsound
+except ImportError:
+    winsound = None
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
@@ -113,6 +119,30 @@ def read_id3_tags(path):
         return {}
 
 
+def read_mp3_quality(path):
+    try:
+        from mutagen.mp3 import MP3
+        info = MP3(path).info
+        return {"bitrate": int(getattr(info, "bitrate", 0) or 0),
+                "sample_rate": int(getattr(info, "sample_rate", 0) or 0),
+                "length": float(getattr(info, "length", 0) or 0)}
+    except Exception:
+        return {"bitrate": 0, "sample_rate": 0, "length": 0.0}
+
+
+def quality_key(item):
+    q = item.get("quality", {})
+    return (q.get("bitrate", 0), q.get("sample_rate", 0), item.get("size", 0))
+
+
+def quality_label(item):
+    q = item.get("quality", {})
+    bitrate, sample_rate = q.get("bitrate", 0), q.get("sample_rate", 0)
+    if bitrate and sample_rate:
+        return f"{bitrate // 1000} kb/s · {sample_rate / 1000:.1f} kHz"
+    return f"{bitrate // 1000} kb/s" if bitrate else "brak danych"
+
+
 def comparison_notes(a, b):
     notes = []
     if a.get("size") == b.get("size"):
@@ -164,8 +194,9 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title(APP_TITLE)
-        self.root.geometry("1120x740")
-        self.root.minsize(880, 600)
+        self.root.geometry("1240x800")
+        # Kontrolki mają stały układ; zmiana rozmiaru przeznaczona jest dla tabeli.
+        self.root.minsize(1120, 650)
         self.events = queue.Queue()
         self.results = []
         self.folder = tk.StringVar()
@@ -173,6 +204,9 @@ class App:
         self.threshold = tk.DoubleVar(value=0.82)
         self.cancel_event = threading.Event()
         self.is_scanning = False
+        self.playback_stop_event = threading.Event()
+        self.playback_process = None
+        self.playback_lock = threading.Lock()
         self.theme_name = self.load_theme()
         self.last_folder = self.load_last_folder()
         if self.last_folder:
@@ -260,25 +294,32 @@ class App:
 
         table_wrap = ttk.Frame(results_card, style="Card.TFrame")
         table_wrap.pack(fill="both", expand=True)
-        cols = ("kind", "similarity", "size", "path")
+        cols = ("kind", "similarity", "quality", "size", "path")
         self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", selectmode="extended")
-        for c, title, width in [("kind", "RODZAJ DOPASOWANIA", 250), ("similarity", "ZGODNOŚĆ", 100),
-                                ("size", "ROZMIAR", 100), ("path", "LOKALIZACJA PLIKU", 570)]:
+        for c, title, width in [("kind", "RODZAJ DOPASOWANIA", 280), ("similarity", "ZGODNOŚĆ", 100),
+                                ("quality", "JAKOŚĆ MP3", 125), ("size", "ROZMIAR", 100),
+                                ("path", "LOKALIZACJA PLIKU", 650)]:
             self.tree.heading(c, text=title)
             self.tree.column(c, width=width, minwidth=width, stretch=False, anchor="w")
         yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         xscroll = ttk.Scrollbar(results_card, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
         self.tree.pack(side="left", fill="both", expand=True)
+        # Paski przewijania są stale widoczne.
         yscroll.pack(side="right", fill="y")
         xscroll.pack(fill="x")
+        self.tree.tag_configure("lower_quality", foreground="#DC2626")
         self.tree.bind("<Double-1>", lambda e: self.open_location())
 
         footer = ttk.Frame(self.main, style="App.TFrame")
         footer.pack(fill="x", pady=(12, 0))
         ttk.Button(footer, text="Otwórz lokalizację", command=self.open_location, style="Secondary.TButton").pack(side="left")
+        self.play_btn = ttk.Button(footer, text="▶  Odsłuchaj 15 s", command=self.play_selected, style="Secondary.TButton")
+        self.play_btn.pack(side="left", padx=(8, 0))
+        self.stop_play_btn = ttk.Button(footer, text="■  Stop audio", command=self.stop_playback, style="Secondary.TButton", state="disabled")
+        self.stop_play_btn.pack(side="left", padx=8)
         ttk.Button(footer, text="Przenieś zaznaczone do „Duplikaty”", command=self.move_selected,
-                   style="Danger.TButton").pack(side="left", padx=8)
+                   style="Danger.TButton").pack(side="left")
         statusbar = ttk.Frame(self.main, style="App.TFrame")
         statusbar.pack(fill="x", pady=(10, 0))
         self.status_label = ttk.Label(statusbar, textvariable=self.status, style="Status.TLabel", anchor="w")
@@ -415,7 +456,8 @@ class App:
                     audio_hash = hashlib.sha256(decoded).hexdigest()
                     fingerprint = chromaprint_signature(path, fpcalc, self.cancel_event)
                     items.append({"path": path, "hash": audio_hash, "fp": fingerprint,
-                                  "size": path.stat().st_size, "tags": read_id3_tags(path)})
+                                  "size": path.stat().st_size, "tags": read_id3_tags(path),
+                                  "quality": read_mp3_quality(path)})
                 except Exception as exc:
                     self.events.put(("status", f"Pominięto {path.name}: {exc}"))
                 self.events.put(("progress", "Skanowanie plików", i, len(files)))
@@ -425,8 +467,9 @@ class App:
             output = []
             for group in by_hash.values():
                 if len(group) > 1:
+                    best = max(group, key=quality_key)
                     for item in group:
-                        output.append((item, "Identyczna zawartość audio", "100.0%"))
+                        output.append((item, "Identyczna zawartość audio", "100.0%", item is not best))
             total_pairs = len(items) * (len(items) - 1) // 2
             checked = 0
             self.events.put(("compare_init", total_pairs, len(files)))
@@ -443,8 +486,10 @@ class App:
                         if score >= threshold:
                             notes = comparison_notes(a, b)
                             suffix = " | " + notes if notes else ""
-                            output.append((a, f"Podobny utwór ↔ {b['path'].name}{suffix}", f"{score * 100:.1f}%"))
-                            output.append((b, f"Podobny utwór ↔ {a['path'].name}{suffix}", f"{score * 100:.1f}%"))
+                            a_is_lower = quality_key(a) < quality_key(b)
+                            b_is_lower = quality_key(b) < quality_key(a)
+                            output.append((a, f"Podobny utwór ↔ {b['path'].name}{suffix}", f"{score * 100:.1f}%", a_is_lower))
+                            output.append((b, f"Podobny utwór ↔ {a['path'].name}{suffix}", f"{score * 100:.1f}%", b_is_lower))
                     if checked % 100 == 0 or checked == total_pairs:
                         self.events.put(("compare_progress", checked, total_pairs, len(files)))
             self.events.put(("done", output, len(files), len(items), None, self.cancel_event.is_set()))
@@ -490,14 +535,20 @@ class App:
                         continue
                     self.results = rows
                     seen = set()
-                    for item, kind, score in rows:
+                    auto_select = []
+                    for item, kind, score, lower_quality in rows:
                         key = (str(item["path"]), kind, score)
                         if key in seen:
                             continue
                         seen.add(key)
-                        self.tree.insert("", "end", values=(kind, score,
-                            f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])))
-                    self.count_label.configure(text=f"{len(seen)} wyników")
+                        iid = self.tree.insert("", "end", values=(kind, score, quality_label(item),
+                            f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])),
+                            tags=("lower_quality",) if lower_quality else ())
+                        if lower_quality:
+                            auto_select.append(iid)
+                    if auto_select:
+                        self.tree.selection_set(auto_select)
+                    self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {len(auto_select)} słabszych kopii")
                     found_files = len({str(item["path"]) for item, _, _ in rows})
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
                     self.status.set("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki." if cancelled else "Zakończono. Sprawdź wyniki przed przenoszeniem.")
@@ -508,7 +559,7 @@ class App:
         self.root.after(100, self._poll)
 
     def selected_paths(self):
-        return [Path(self.tree.item(i, "values")[3]) for i in self.tree.selection()]
+        return list(dict.fromkeys(Path(self.tree.item(i, "values")[4]) for i in self.tree.selection()))
 
     def open_location(self):
         paths = self.selected_paths()
@@ -562,7 +613,7 @@ class App:
             return
         with open(dest, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["Rodzaj dopasowania", "Zgodność fingerprintu", "Rozmiar", "Plik"])
+            writer.writerow(["Rodzaj dopasowania", "Zgodność fingerprintu", "Jakość MP3", "Rozmiar", "Plik"])
             for item_id in self.tree.get_children():
                 writer.writerow(self.tree.item(item_id, "values"))
         messagebox.showinfo(APP_TITLE, "Zapisano raport CSV.")
