@@ -200,3 +200,30 @@ jobs:
           path: mp3_duplikaty_paczka/dist/Mp3_Duplicate_Finder/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Build standalone single-file EXE
+        shell: pwsh
+        working-directory: mp3_duplikaty_paczka
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_Portable --version-file version_info.txt --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
+          $exe = "dist-portable/Mp3_Duplicate_Finder_Portable.exe"
+          if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Standalone EXE build failed" }
+          Copy-Item README.txt, THIRD_PARTY_NOTICES.txt, FFMPEG_LICENSE.txt, CHROMAPRINT_LICENSE.txt, APP_LICENSE.txt dist-portable/
+          @'
+          STANDALONE WINDOWS EXECUTABLE
+          This is a single-file PyInstaller build. It extracts bundled runtime
+          components to a temporary directory when launched.
+          The executable is unsigned unless a trusted Authenticode certificate
+          has been configured in the repository secrets.
+          '@ | Set-Content -Encoding utf8 dist-portable/SECURITY.txt
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  Mp3_Duplicate_Finder_Portable.exe" | Set-Content -Encoding ascii dist-portable/SHA256SUMS.txt
+
+      - name: Upload standalone single-file EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mp3_Duplicate_Finder-Standalone-EXE
+          path: mp3_duplikaty_paczka/dist-portable/
+          if-no-files-found: error
+          retention-days: 30
+
