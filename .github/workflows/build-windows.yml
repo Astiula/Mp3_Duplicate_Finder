@@ -205,7 +205,9 @@ jobs:
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
         run: |
-          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_Portable --version-file version_info.txt --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
+          $ffmpeg = (Resolve-Path "ffmpeg.exe").Path
+          $fpcalc = (Resolve-Path "fpcalc.exe").Path
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_Portable --version-file version_info.txt --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "$ffmpeg;." --add-binary "$fpcalc;." mp3_duplikaty.py
           $exe = "dist-portable/Mp3_Duplicate_Finder_Portable.exe"
           if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Standalone EXE build failed" }
           Copy-Item README.txt, THIRD_PARTY_NOTICES.txt, FFMPEG_LICENSE.txt, CHROMAPRINT_LICENSE.txt, APP_LICENSE.txt dist-portable/
