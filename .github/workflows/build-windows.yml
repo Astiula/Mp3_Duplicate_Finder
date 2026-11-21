@@ -11,6 +11,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      SIGN_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+      SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,12 +163,9 @@ jobs:
             Set-Content -Encoding ascii (Join-Path $root "SHA256SUMS.txt")
 
       - name: Optional Authenticode signing
-        if: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 != '' && secrets.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
+        if: ${{ env.SIGN_CERT != '' && env.SIGN_PASSWORD != '' }}
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
-        env:
-          SIGN_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
-          SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
         run: |
           $bytes = [Convert]::FromBase64String($env:SIGN_CERT)
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\codesign.pfx", $bytes)
