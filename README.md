@@ -19,3 +19,12 @@ Kod aplikacji jest udostępniany na zasadach własnościowych (all rights reserv
 - **Chromaprint / fpcalc 1.6.1** — LGPL 2.1; kod Chromaprint zawiera również części na licencji MIT. Szczegóły: https://github.com/acoustid/chromaprint/blob/v1.6.1/LICENSE.md.
 
 Paczka dystrybucyjna zawiera osobny plik THIRD_PARTY_NOTICES.txt i dostępne informacje licencyjne komponentów. FFmpeg i Chromaprint pozostają odrębnymi projektami i zachowują własne licencje. To jest informacja o komponentach, a nie porada prawna.
+
+
+## Bezpieczeństwo i dystrybucja Windows
+- Kompilacja Windows używa trybu PyInstaller `onedir`, bez UPX i bez samorozpakowującego się pliku `onefile`; to ogranicza część heurystycznych fałszywych alarmów, ale nie gwarantuje braku detekcji.
+- Paczka zawiera `SHA256SUMS.txt` do weryfikacji integralności oraz informacje o komponentach zewnętrznych.
+- Program nie instaluje usług, sterowników, zadań harmonogramu ani wpisów autostartu.
+- Program analizuje pliki w folderze wybranym przez użytkownika. Przenoszenie plików wymaga osobnej akcji użytkownika.
+- Podpis Authenticode może być dodany w procesie CI po skonfigurowaniu sekretów repozytorium `WINDOWS_SIGNING_CERT_BASE64` i `WINDOWS_SIGNING_CERT_PASSWORD`. Bez certyfikatu build pozostaje niepodpisany i SmartScreen może wyświetlać ostrzeżenie z powodu braku reputacji wydawcy.
+- Nie ma technicznej możliwości zagwarantowania wyniku identycznego dla wszystkich antywirusów. W razie detekcji należy przesłać konkretny plik i nazwę wykrycia do analizy, a nie wyłączać ochronę systemu.
