@@ -160,18 +160,17 @@ jobs:
             Set-Content -Encoding ascii (Join-Path $root "SHA256SUMS.txt")
 
       - name: Optional Authenticode signing
-        if: \${{ secrets.WINDOWS_SIGNING_CERT_BASE64 != '' && secrets.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
+        if: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 != '' && secrets.WINDOWS_SIGNING_CERT_PASSWORD != '' }}
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
         env:
-          SIGN_CERT: \${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
-          SIGN_PASSWORD: \${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+          SIGN_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
         run: |
           $bytes = [Convert]::FromBase64String($env:SIGN_CERT)
           [IO.File]::WriteAllBytes("$env:RUNNER_TEMP\codesign.pfx", $bytes)
           $signtool = Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
-            Where-Object { $_.FullName -match '\\x64\\signtool.exe
- } |
+            Where-Object { $_.FullName.Contains('\\x64\\signtool.exe') } |
             Sort-Object FullName -Descending | Select-Object -First 1
           if (!$signtool) { throw "signtool.exe not found" }
           & $signtool.FullName sign /f "$env:RUNNER_TEMP\codesign.pfx" /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/Mp3_Duplicate_Finder/Mp3_Duplicate_Finder.exe"
