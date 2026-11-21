@@ -521,6 +521,10 @@ class App:
                     self.progress.configure(maximum=max(total_pairs, 1), value=current)
                     self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: {scanned}/{scanned}")
                     self.status.set(f"Porównywanie odcisków: {current}/{total_pairs} par")
+                elif msg[0] == "playback_done":
+                    self.play_btn.configure(state="normal")
+                    self.stop_play_btn.configure(state="disabled")
+                    self.status.set(msg[1])
                 elif msg[0] == "done":
                     _, rows, total, ok, error, cancelled = msg
                     self.progress.configure(value=0)
@@ -560,6 +564,90 @@ class App:
 
     def selected_paths(self):
         return list(dict.fromkeys(Path(self.tree.item(i, "values")[4]) for i in self.tree.selection()))
+
+    def play_selected(self):
+        if winsound is None:
+            messagebox.showerror(APP_TITLE, "Odsłuch próbek jest dostępny w wersji Windows.")
+            return
+        paths = self.selected_paths()
+        if not paths:
+            messagebox.showinfo(APP_TITLE, "Zaznacz plik MP3 na liście wyników.")
+            return
+        path = paths[0]
+        if not path.is_file():
+            messagebox.showwarning(APP_TITLE, "Wybrany plik już nie istnieje.")
+            return
+        ffmpeg = bundled_tool("ffmpeg.exe") or bundled_tool("ffmpeg")
+        if not ffmpeg:
+            messagebox.showerror(APP_TITLE, "Nie znaleziono FFmpeg.")
+            return
+        self.stop_playback()
+        self.playback_stop_event = threading.Event()
+        stop_event = self.playback_stop_event
+        self.play_btn.configure(state="disabled")
+        self.stop_play_btn.configure(state="normal")
+        self.status.set(f"Odtwarzanie próbki (maks. 15 s): {path.name}")
+        threading.Thread(target=self._play_worker, args=(path, ffmpeg, stop_event),
+                         daemon=True).start()
+
+    def _play_worker(self, path, ffmpeg, stop_event):
+        wav_path = None
+        message = "Odsłuch zakończony."
+        process = None
+        try:
+            fd, wav_path = tempfile.mkstemp(prefix="mp3df_preview_", suffix=".wav")
+            os.close(fd)
+            cmd = [ffmpeg, "-y", "-v", "error", "-i", str(path), "-t", "15",
+                   "-vn", "-ac", "2", "-ar", "44100", "-sample_fmt", "s16", wav_path]
+            process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            with self.playback_lock:
+                self.playback_process = process
+            while process.poll() is None:
+                if stop_event.wait(0.1):
+                    process.terminate()
+                    try:
+                        process.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    message = "Odsłuch zatrzymany."
+                    return
+            if process.returncode != 0:
+                error = process.stderr.read().decode("utf-8", "ignore")[-300:]
+                raise RuntimeError(error or "Nie udało się przygotować próbki audio.")
+            if not stop_event.is_set():
+                winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+                if stop_event.is_set():
+                    message = "Odsłuch zatrzymany."
+        except Exception as exc:
+            message = f"Błąd odsłuchu: {exc}"
+        finally:
+            with self.playback_lock:
+                self.playback_process = None
+            if wav_path and os.path.exists(wav_path):
+                try:
+                    os.remove(wav_path)
+                except OSError:
+                    pass
+            self.events.put(("playback_done", message))
+
+    def stop_playback(self):
+        self.playback_stop_event.set()
+        with self.playback_lock:
+            process = self.playback_process
+        if process and process.poll() is None:
+            try:
+                process.terminate()
+            except Exception:
+                pass
+        if winsound is not None:
+            try:
+                winsound.PlaySound(None, winsound.SND_PURGE)
+            except Exception:
+                pass
+        if hasattr(self, "stop_play_btn"):
+            self.stop_play_btn.configure(state="disabled")
+            self.play_btn.configure(state="normal")
 
     def open_location(self):
         paths = self.selected_paths()
