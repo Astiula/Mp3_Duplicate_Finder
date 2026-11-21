@@ -51,26 +51,42 @@ def bundled_tool(name):
     return shutil.which(name) or shutil.which(name + ".exe")
 
 
-def decode_audio(path, ffmpeg):
+def run_cancellable(cmd, cancel_event, text=False):
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         text=text, encoding="utf-8" if text else None,
+                         errors="replace" if text else None,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    while True:
+        if cancel_event.is_set():
+            p.terminate()
+            try:
+                p.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                p.kill()
+            raise InterruptedError("Skanowanie zatrzymane przez użytkownika.")
+        try:
+            return p.communicate(timeout=0.25)
+        except subprocess.TimeoutExpired:
+            continue
+
+
+def decode_audio(path, ffmpeg, cancel_event):
     cmd = [ffmpeg, "-v", "error", "-i", str(path), "-map", "0:a:0",
            "-ac", "1", "-ar", "11025", "-f", "s16le", "pipe:1"]
-    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                       timeout=900, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if p.returncode != 0 or not p.stdout:
-        error = p.stderr.decode("utf-8", "ignore")[-400:]
+    stdout, stderr = run_cancellable(cmd, cancel_event)
+    if not stdout:
+        error = stderr.decode("utf-8", "ignore")[-400:]
         raise RuntimeError(error or "Nie można odczytać dźwięku")
-    return p.stdout
+    return stdout
 
 
-def chromaprint_signature(path, fpcalc):
+def chromaprint_signature(path, fpcalc, cancel_event):
     cmd = [fpcalc, "-raw", "-length", "0", str(path)]
-    p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                       text=True, encoding="utf-8", errors="replace", timeout=900,
-                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
-    if p.returncode != 0:
-        raise RuntimeError((p.stderr or p.stdout or "Błąd fpcalc")[-400:])
+    stdout, stderr = run_cancellable(cmd, cancel_event, text=True)
+    if stderr and not stdout:
+        raise RuntimeError((stderr or "Błąd fpcalc")[-400:])
     duration, fingerprint = 0.0, None
-    for line in p.stdout.splitlines():
+    for line in stdout.splitlines():
         if line.startswith("DURATION="):
             try:
                 duration = float(line.split("=", 1)[1])
@@ -365,9 +381,9 @@ class App:
                 if self.cancel_event.is_set():
                     break
                 try:
-                    decoded = decode_audio(path, ffmpeg)
+                    decoded = decode_audio(path, ffmpeg, self.cancel_event)
                     audio_hash = hashlib.sha256(decoded).hexdigest()
-                    fingerprint = chromaprint_signature(path, fpcalc)
+                    fingerprint = chromaprint_signature(path, fpcalc, self.cancel_event)
                     items.append({"path": path, "hash": audio_hash, "fp": fingerprint,
                                   "size": path.stat().st_size})
                 except Exception as exc:
