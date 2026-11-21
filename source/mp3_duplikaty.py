@@ -99,6 +99,16 @@ def chromaprint_signature(path, fpcalc, cancel_event):
     return duration, fingerprint
 
 
+def comparison_notes(a, b):
+    notes = []
+    if a.get("size") == b.get("size"):
+        notes.append("ten sam rozmiar pliku")
+    da, db = a.get("fp", (0, []))[0], b.get("fp", (0, []))[0]
+    if da and db and abs(da - db) <= 2:
+        notes.append("czas trwania ±2 s")
+    return ", ".join(notes)
+
+
 def fingerprint_similarity(a, b):
     da, fa = a
     db, fb = b
@@ -411,8 +421,10 @@ class App:
                     if a["hash"] != b["hash"]:
                         score = fingerprint_similarity(a["fp"], b["fp"])
                         if score >= threshold:
-                            output.append((a, f"Podobny utwór ↔ {b['path'].name}", f"{score * 100:.1f}%"))
-                            output.append((b, f"Podobny utwór ↔ {a['path'].name}", f"{score * 100:.1f}%"))
+                            notes = comparison_notes(a, b)
+                            suffix = " | " + notes if notes else ""
+                            output.append((a, f"Podobny utwór ↔ {b['path'].name}{suffix}", f"{score * 100:.1f}%"))
+                            output.append((b, f"Podobny utwór ↔ {a['path'].name}{suffix}", f"{score * 100:.1f}%"))
                     if checked % 100 == 0 or checked == total_pairs:
                         self.events.put(("compare_progress", checked, total_pairs, len(files)))
             self.events.put(("done", output, len(files), len(items), None, self.cancel_event.is_set()))
