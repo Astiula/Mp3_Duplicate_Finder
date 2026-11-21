@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 APP_TITLE = "Mp3 Duplicate Finder"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.3.0"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
@@ -195,8 +195,8 @@ class App:
         self.root = root
         self.root.title(APP_TITLE)
         self.root.geometry("1240x800")
-        # Kontrolki mają stały układ; zmiana rozmiaru przeznaczona jest dla tabeli.
-        self.root.minsize(1120, 650)
+        # Minimalny rozmiar chroni stałe sekcje sterujące przed obcięciem.
+        self.root.minsize(1180, 740)
         self.events = queue.Queue()
         self.results = []
         self.folder = tk.StringVar()
@@ -244,9 +244,11 @@ class App:
 
         self.main = ttk.Frame(self.root, padding=20, style="App.TFrame")
         self.main.pack(fill="both", expand=True)
+        self.main.grid_columnconfigure(0, weight=1)
+        self.main.grid_rowconfigure(3, weight=1)
 
         header = ttk.Frame(self.main, style="App.TFrame")
-        header.pack(fill="x", pady=(0, 16))
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         titlebox = ttk.Frame(header, style="App.TFrame")
         titlebox.pack(side="left", fill="x", expand=True)
         ttk.Label(titlebox, text="MP3 DUPLICATE FINDER", style="Title.TLabel").pack(anchor="w")
@@ -257,7 +259,7 @@ class App:
         ttk.Button(header, text="O programie", command=self.show_about, style="Secondary.TButton").pack(side="right")
 
         folder_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
-        folder_card.pack(fill="x", pady=(0, 12))
+        folder_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
         ttk.Label(folder_card, text="FOLDER Z MUZYKĄ", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
         folder_row = ttk.Frame(folder_card, style="Card.TFrame")
         folder_row.pack(fill="x")
@@ -265,7 +267,7 @@ class App:
         ttk.Button(folder_row, text="Wybierz folder…", command=self.choose, style="Secondary.TButton").pack(side="left", padx=(8, 0))
 
         settings_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
-        settings_card.pack(fill="x", pady=(0, 12))
+        settings_card.grid(row=2, column=0, sticky="ew", pady=(0, 10))
         ttk.Label(settings_card, text="USTAWIENIA ANALIZY", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
         controls = ttk.Frame(settings_card, style="Card.TFrame")
         controls.pack(fill="x")
@@ -285,7 +287,7 @@ class App:
                   style="Hint.TLabel").pack(anchor="w", pady=(8, 0))
 
         results_card = ttk.Frame(self.main, padding=12, style="Card.TFrame")
-        results_card.pack(fill="both", expand=True)
+        results_card.grid(row=3, column=0, sticky="nsew")
         result_header = ttk.Frame(results_card, style="Card.TFrame")
         result_header.pack(fill="x", pady=(0, 8))
         ttk.Label(result_header, text="WYNIKI ANALIZY", style="Section.TLabel").pack(side="left")
@@ -312,7 +314,7 @@ class App:
         self.tree.bind("<Double-1>", lambda e: self.open_location())
 
         footer = ttk.Frame(self.main, style="App.TFrame")
-        footer.pack(fill="x", pady=(12, 0))
+        footer.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         ttk.Button(footer, text="Otwórz lokalizację", command=self.open_location, style="Secondary.TButton").pack(side="left")
         self.play_btn = ttk.Button(footer, text="▶  Odsłuchaj 15 s", command=self.play_selected, style="Secondary.TButton")
         self.play_btn.pack(side="left", padx=(8, 0))
@@ -321,7 +323,7 @@ class App:
         ttk.Button(footer, text="Przenieś zaznaczone do „Duplikaty”", command=self.move_selected,
                    style="Danger.TButton").pack(side="left")
         statusbar = ttk.Frame(self.main, style="App.TFrame")
-        statusbar.pack(fill="x", pady=(10, 0))
+        statusbar.grid(row=5, column=0, sticky="ew", pady=(8, 0))
         self.status_label = ttk.Label(statusbar, textvariable=self.status, style="Status.TLabel", anchor="w")
         self.status_label.pack(side="left", fill="x", expand=True)
         self.scan_counts = tk.StringVar(value="Znalezione pliki: 0  |  Przeskanowane: 0/0")
