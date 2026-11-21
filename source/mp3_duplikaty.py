@@ -539,21 +539,23 @@ class App:
                         continue
                     self.results = rows
                     seen = set()
-                    auto_select = []
+                    auto_select_paths = set()
                     for item, kind, score, lower_quality in rows:
+                        if lower_quality:
+                            auto_select_paths.add(str(item["path"]))
                         key = (str(item["path"]), kind, score)
                         if key in seen:
                             continue
                         seen.add(key)
-                        iid = self.tree.insert("", "end", values=(kind, score, quality_label(item),
+                        self.tree.insert("", "end", values=(kind, score, quality_label(item),
                             f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])),
                             tags=("lower_quality",) if lower_quality else ())
-                        if lower_quality:
-                            auto_select.append(iid)
+                    auto_select = [iid for iid in self.tree.get_children()
+                                   if self.tree.item(iid, "values")[4] in auto_select_paths]
                     if auto_select:
                         self.tree.selection_set(auto_select)
                     self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {len(auto_select)} słabszych kopii")
-                    found_files = len({str(item["path"]) for item, _, _ in rows})
+                    found_files = len({str(item["path"]) for item, _, _, _ in rows})
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
                     self.status.set("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki." if cancelled else "Zakończono. Sprawdź wyniki przed przenoszeniem.")
                     if not seen and not cancelled:
