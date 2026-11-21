@@ -121,14 +121,6 @@ jobs:
       - name: Install build dependencies
         run: python -m pip install --upgrade pip pyinstaller mutagen
 
-      - name: Build Windows application (directory mode)
-        shell: pwsh
-        working-directory: mp3_duplikaty_paczka
-        run: |
-          # No UPX and no self-extracting one-file bootloader.
-          pyinstaller --noconfirm --clean --onedir --windowed --noupx --name Mp3_Duplicate_Finder --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
-          if (!(Test-Path "dist/Mp3_Duplicate_Finder/Mp3_Duplicate_Finder.exe")) { throw "EXE build failed" }
-
       - name: Add version metadata
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
