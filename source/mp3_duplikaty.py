@@ -125,7 +125,12 @@ class App:
         self.folder = tk.StringVar()
         self.status = tk.StringVar(value="Wybierz folder z muzyką, aby rozpocząć.")
         self.threshold = tk.DoubleVar(value=0.82)
+        self.cancel_event = threading.Event()
+        self.is_scanning = False
         self.theme_name = self.load_theme()
+        self.last_folder = self.load_last_folder()
+        if self.last_folder:
+            self.folder.set(self.last_folder)
         self._build()
         self.apply_theme()
         self.root.after(100, self._poll)
@@ -136,13 +141,22 @@ class App:
         except Exception:
             return "light"
 
-    def save_theme(self):
+    def load_last_folder(self):
+        try:
+            return json.loads(settings_path().read_text(encoding="utf-8")).get("last_folder", "")
+        except Exception:
+            return ""
+
+    def save_settings(self):
         try:
             path = settings_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"theme": self.theme_name}), encoding="utf-8")
+            path.write_text(json.dumps({"theme": self.theme_name, "last_folder": self.folder.get().strip()}), encoding="utf-8")
         except Exception:
             pass
+
+    def save_theme(self):
+        self.save_settings()
 
     def _build(self):
         self.style = ttk.Style()
@@ -167,7 +181,7 @@ class App:
         ttk.Label(folder_card, text="FOLDER Z MUZYKĄ", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
         folder_row = ttk.Frame(folder_card, style="Card.TFrame")
         folder_row.pack(fill="x")
-        ttk.Entry(folder_row, textvariable=self.folder, style="App.TEntry").pack(side="left", fill="x", expand=True)
+        ttk.Entry(folder_row, textvariable=self.folder, style="App.TEntry", width=62).pack(side="left")
         ttk.Button(folder_row, text="Wybierz folder…", command=self.choose, style="Secondary.TButton").pack(side="left", padx=(8, 0))
 
         settings_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
@@ -182,8 +196,10 @@ class App:
         self.th_label = ttk.Label(controls, text="82%", style="Value.TLabel", width=5)
         self.th_label.pack(side="left")
         self.threshold.trace_add("write", lambda *_: self.th_label.config(text=f"{self.threshold.get():.0%}"))
-        self.scan_btn = ttk.Button(controls, text="▶  Rozpocznij skanowanie", command=self.start_scan, style="Primary.TButton")
+        self.scan_btn = ttk.Button(controls, text="▶  Rozpocznij skanowanie", command=self.start_scan, style="Primary.TButton", width=24)
         self.scan_btn.pack(side="right")
+        self.stop_btn = ttk.Button(controls, text="■  Zatrzymaj", command=self.stop_scan, style="Danger.TButton", width=13, state="disabled")
+        self.stop_btn.pack(side="right", padx=(0, 8))
         ttk.Button(controls, text="Eksportuj CSV", command=self.export_csv, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Label(settings_card, text="Niższy próg wykrywa więcej podobieństw, ale może zwiększyć liczbę fałszywych trafień.",
                   style="Hint.TLabel").pack(anchor="w", pady=(8, 0))
@@ -203,7 +219,7 @@ class App:
         for c, title, width in [("kind", "RODZAJ DOPASOWANIA", 250), ("similarity", "ZGODNOŚĆ", 100),
                                 ("size", "ROZMIAR", 100), ("path", "LOKALIZACJA PLIKU", 570)]:
             self.tree.heading(c, text=title)
-            self.tree.column(c, width=width, anchor="w")
+            self.tree.column(c, width=width, minwidth=width, stretch=False, anchor="w")
         yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         xscroll = ttk.Scrollbar(results_card, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
@@ -297,9 +313,16 @@ class App:
         ttk.Button(frame, text="Zamknij", command=win.destroy, style="Primary.TButton").pack(anchor="e")
 
     def choose(self):
-        path = filedialog.askdirectory(title="Wybierz folder z plikami MP3")
+        path = filedialog.askdirectory(title="Wybierz folder z plikami MP3", initialdir=self.folder.get() if Path(self.folder.get()).is_dir() else None)
         if path:
             self.folder.set(path)
+            self.save_settings()
+
+    def stop_scan(self):
+        if self.is_scanning:
+            self.cancel_event.set()
+            self.stop_btn.configure(state="disabled")
+            self.status.set("Zatrzymywanie skanowania…")
 
     def start_scan(self):
         folder = self.folder.get().strip()
@@ -317,7 +340,11 @@ class App:
             messagebox.showerror(APP_TITLE, "Nie znaleziono: " + ", ".join(missing) +
                                  ". Umieść pliki obok programu lub sprawdź paczkę instalacyjną.")
             return
+        self.save_settings()
+        self.cancel_event.clear()
+        self.is_scanning = True
         self.scan_btn.configure(state="disabled")
+        self.stop_btn.configure(state="normal")
         self.progress.configure(mode="determinate", maximum=1, value=0)
         self.scan_counts.set("Znalezione pliki: 0  |  Przeskanowane: 0/0")
         self.status.set("Wyszukiwanie plików MP3…")
@@ -335,6 +362,8 @@ class App:
             self.events.put(("status", f"Znaleziono {len(files)} plików MP3. Obliczanie odcisków audio…"))
             items = []
             for i, path in enumerate(files, 1):
+                if self.cancel_event.is_set():
+                    break
                 try:
                     decoded = decode_audio(path, ffmpeg)
                     audio_hash = hashlib.sha256(decoded).hexdigest()
@@ -356,7 +385,11 @@ class App:
             checked = 0
             self.events.put(("compare_init", total_pairs, len(files)))
             for i in range(len(items)):
+                if self.cancel_event.is_set():
+                    break
                 for j in range(i + 1, len(items)):
+                    if self.cancel_event.is_set():
+                        break
                     a, b = items[i], items[j]
                     checked += 1
                     if a["hash"] != b["hash"]:
@@ -366,9 +399,9 @@ class App:
                             output.append((b, f"Podobny utwór ↔ {a['path'].name}", f"{score * 100:.1f}%"))
                     if checked % 100 == 0 or checked == total_pairs:
                         self.events.put(("compare_progress", checked, total_pairs, len(files)))
-            self.events.put(("done", output, len(files), len(items), None))
+            self.events.put(("done", output, len(files), len(items), None, self.cancel_event.is_set()))
         except Exception as exc:
-            self.events.put(("done", [], 0, 0, str(exc)))
+            self.events.put(("done", [], 0, 0, str(exc), False))
 
     def _poll(self):
         try:
@@ -396,9 +429,11 @@ class App:
                     self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: {scanned}/{scanned}")
                     self.status.set(f"Porównywanie odcisków: {current}/{total_pairs} par")
                 elif msg[0] == "done":
-                    _, rows, total, ok, error = msg
+                    _, rows, total, ok, error, cancelled = msg
                     self.progress.configure(value=0)
                     self.scan_btn.configure(state="normal")
+                    self.stop_btn.configure(state="disabled")
+                    self.is_scanning = False
                     if error:
                         self.count_label.configure(text="Błąd analizy")
                         self.scan_counts.set("Znalezione pliki: 0  |  Przeskanowane: 0/0")
@@ -417,8 +452,8 @@ class App:
                     self.count_label.configure(text=f"{len(seen)} wyników")
                     found_files = len({str(item["path"]) for item, _, _ in rows})
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
-                    self.status.set("Zakończono. Sprawdź wyniki przed przenoszeniem.")
-                    if not seen:
+                    self.status.set("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki." if cancelled else "Zakończono. Sprawdź wyniki przed przenoszeniem.")
+                    if not seen and not cancelled:
                         self.status.set("Zakończono. Nie znaleziono dopasowań.")
         except queue.Empty:
             pass
