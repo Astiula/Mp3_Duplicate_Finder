@@ -52,6 +52,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "dist-five" | Out-Null
+          $ffmpegPath = (Resolve-Path "ffmpeg.exe").Path
+          $fpcalcPath = (Resolve-Path "fpcalc.exe").Path
           @'
           VSVersionInfo(
             ffi=FixedFileInfo(filevers=(1, 5, 2, 0), prodvers=(1, 5, 2, 0),
@@ -94,7 +96,7 @@ jobs:
           "@
             $python | python -
             $exeName = "Mp3_Duplicate_Finder_$($variant.Name)"
-            pyinstaller --noconfirm --clean --onefile --windowed --noupx --name $exeName --distpath dist-five --workpath "build-$($variant.Key)" --specpath "spec-$($variant.Key)" --version-file version_info.txt --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." $buildSource
+            pyinstaller --noconfirm --clean --onefile --windowed --noupx --name $exeName --distpath dist-five --workpath "build-$($variant.Key)" --specpath "spec-$($variant.Key)" --version-file version_info.txt --add-binary "$ffmpegPath;." --add-binary "$fpcalcPath;." $buildSource
             if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed for $($variant.Key)" }
             $exe = "dist-five/$exeName.exe"
             if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Missing or invalid executable: $exe" }
