@@ -415,7 +415,7 @@ class App:
         # Short explanatory line under the ribbon.
         hint = ttk.Frame(self.root, style="App.TFrame", padding=(14, 2, 14, 7))
         hint.grid(row=3, column=0, sticky="nsew")
-        hint.grid_rowconfigure(1, weight=1)
+        hint.grid_rowconfigure(2 if UI_DESIGN == "dashboard" else 1, weight=1)
         hint.grid_columnconfigure(0, weight=1)
         results_head = ttk.Frame(hint, style="App.TFrame")
         results_head.grid(row=0, column=0, sticky="ew", pady=(0, 7))
@@ -426,8 +426,26 @@ class App:
                                      style="ResultsCount.TLabel")
         self.count_label.grid(row=0, column=1, sticky="e")
 
+        if UI_DESIGN == "dashboard":
+            metrics = ttk.Frame(hint, style="App.TFrame")
+            metrics.grid(row=1, column=0, sticky="ew", pady=(0, 7))
+            for col in range(3):
+                metrics.grid_columnconfigure(col, weight=1)
+            self.dashboard_threshold = tk.StringVar(value="82%")
+            self.dashboard_status = tk.StringVar(value="GOTOWY")
+            self.dashboard_results = tk.StringVar(value="0")
+            self.threshold.trace_add("write", lambda *_: self.dashboard_threshold.set(f"{self.threshold.get():.0%}"))
+            for col, (caption, value) in enumerate((
+                ("PRÓG PODOBIEŃSTWA", self.dashboard_threshold),
+                ("STATUS ANALIZY", self.dashboard_status),
+                ("GRUPY DUPLIKATÓW", self.dashboard_results)
+            )):
+                metric = ttk.Frame(metrics, style="Card.TFrame", padding=(12, 7))
+                metric.grid(row=0, column=col, sticky="ew", padx=(0, 5))
+                ttk.Label(metric, text=caption, style="RibbonHint.TLabel").pack(anchor="w")
+                ttk.Label(metric, textvariable=value, style="Value.TLabel").pack(anchor="w", pady=(2, 0))
         table_wrap = ttk.Frame(hint, style="Card.TFrame", padding=7)
-        table_wrap.grid(row=1, column=0, sticky="nsew")
+        table_wrap.grid(row=2 if UI_DESIGN == "dashboard" else 1, column=0, sticky="nsew")
         table_wrap.grid_rowconfigure(0, weight=1)
         table_wrap.grid_columnconfigure(0, weight=1)
         cols = ("kind", "similarity", "quality", "size", "path")
@@ -614,6 +632,9 @@ class App:
         self.results = []
         self.scanned_items = []
         self.count_label.configure(text="Analiza w toku…")
+        if self.design == "dashboard":
+            self.dashboard_status.set("SKANOWANIE")
+            self.dashboard_results.set("…")
         threshold = float(self.threshold.get())
         threading.Thread(target=self._scan_worker,
                          args=(Path(folder), ffmpeg, fpcalc, threshold), daemon=True).start()
@@ -731,6 +752,9 @@ class App:
                         self.tree.selection_set(auto_select)
                     selected_files = len({self.tree.item(iid, "values")[4] for iid in auto_select})
                     self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {selected_files} plików z duplikatami")
+                    if self.design == "dashboard":
+                        self.dashboard_status.set("ZATRZYMANO" if cancelled else "ZAKOŃCZONO")
+                        self.dashboard_results.set(str(len(seen)))
                     found_files = len({str(item["path"]) for item, _, _, _ in rows})
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
                     self.status.set(tr("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki.") if cancelled else tr("Zakończono. Sprawdź wyniki przed przenoszeniem."))
