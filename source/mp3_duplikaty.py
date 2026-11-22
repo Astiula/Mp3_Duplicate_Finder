@@ -461,7 +461,7 @@ class App:
         self.tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
         yscroll.grid(row=0, column=1, sticky="ns")
-        xscroll.grid(row=2, column=0, sticky="ew", padx=(7, 0))
+        xscroll.grid(row=3 if UI_DESIGN == "dashboard" else 2, column=0, sticky="ew", padx=(7, 0))
         self.tree.tag_configure("lower_quality", foreground="#DC2626")
         self.tree.bind("<Double-1>", lambda e: self.open_location())
 
