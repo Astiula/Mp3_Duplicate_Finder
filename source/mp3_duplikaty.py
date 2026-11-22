@@ -8,6 +8,7 @@ import queue
 import shutil
 import csv
 import tempfile
+import ctypes
 from pathlib import Path
 
 try:
@@ -18,6 +19,49 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 APP_TITLE = "Mp3 Duplicate Finder"
+
+def windows_language():
+    """Read the language selected in Windows regional settings."""
+    try:
+        name = ctypes.create_unicode_buffer(85)
+        if ctypes.windll.kernel32.GetUserDefaultLocaleName(name, len(name)):
+            return name.value.replace("-", "_").split("_", 1)[0].lower()
+    except Exception:
+        pass
+    try:
+        import locale
+        return (locale.getlocale()[0] or "en").split("_", 1)[0].lower()
+    except Exception:
+        return "en"
+
+
+LANGUAGE = "pl" if windows_language() == "pl" else "en"
+TRANSLATIONS = {
+    "Wyszukiwanie identycznych i podobnych nagrań na podstawie odcisku audio": "Find identical and similar audio tracks using audio fingerprints",
+    "O programie": "About", "Tryb ciemny": "Dark mode", "Tryb jasny": "Light mode",
+    "FOLDER Z MUZYKĄ": "MUSIC FOLDER", "Wybierz folder…": "Choose folder…",
+    "USTAWIENIA ANALIZY": "SCAN SETTINGS", "Próg podobieństwa:": "Similarity threshold:",
+    "▶  Rozpocznij skanowanie": "▶  Start scan", "■  Zatrzymaj": "■  Stop",
+    "Eksportuj CSV": "Export CSV", "WYNIKI ANALIZY": "SCAN RESULTS",
+    "RODZAJ DOPASOWANIA": "MATCH TYPE", "ZGODNOŚĆ": "SIMILARITY",
+    "JAKOŚĆ MP3": "MP3 QUALITY", "ROZMIAR": "SIZE", "LOKALIZACJA PLIKU": "FILE LOCATION",
+    "Otwórz lokalizację": "Open file location", "▶  Odsłuchaj 15 s": "▶  Play 15 sec",
+    "■  Stop audio": "■  Stop audio",
+    "Przenieś zaznaczone do „Duplikaty”": "Move selected to “Duplicates”",
+    "Zapisz raport CSV": "Save CSV report",
+    "Najpierw wybierz prawidłowy folder.": "Please choose a valid folder first.",
+    "Brak zeskanowanych plików MP3 do eksportu.": "There are no scanned MP3 files to export.",
+    "Wybierz folder z plikami MP3": "Select a folder containing MP3 files",
+    "Nazwa": "File name", "Lokalizacja": "Location", "Tagi MP3": "MP3 tags",
+    "Duplikat": "Duplicate", "Tytuł": "Title", "Wykonawca": "Artist",
+    "Numer utworu": "Track number", "Rok": "Year", "Gatunek": "Genre",
+    "TAK — identyczny": "YES — identical", "TAK — podobny": "YES — similar", "Nie": "No",
+}
+
+
+def tr(value):
+    return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
+
 APP_VERSION = "1.4.0"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -196,7 +240,7 @@ class App:
         self.root.title(APP_TITLE)
         self.root.geometry("1240x800")
         # Minimalny rozmiar chroni stałe sekcje sterujące przed obcięciem.
-        self.root.minsize(1160, 700)
+        self.root.minsize(900, 620)
         self.events = queue.Queue()
         self.results = []
         self.scanned_items = []
@@ -260,37 +304,37 @@ class App:
         titlebox = ttk.Frame(header, style="App.TFrame")
         titlebox.pack(side="left", fill="x", expand=True)
         ttk.Label(titlebox, text="MP3 DUPLICATE FINDER", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(titlebox, text="Wyszukiwanie identycznych i podobnych nagrań na podstawie odcisku audio",
+        ttk.Label(titlebox, text=tr("Wyszukiwanie identycznych i podobnych nagrań na podstawie odcisku audio"),
                   style="Subtitle.TLabel").pack(anchor="w", pady=(4, 0))
-        self.theme_btn = ttk.Button(header, text="☾  Tryb ciemny", command=self.toggle_theme, style="Secondary.TButton")
+        self.theme_btn = ttk.Button(header, text="☾  " + tr("Tryb ciemny"), command=self.toggle_theme, style="Secondary.TButton")
         self.theme_btn.pack(side="right", padx=(8, 0))
-        ttk.Button(header, text="O programie", command=self.show_about, style="Secondary.TButton").pack(side="right")
+        ttk.Button(header, text=tr("O programie"), command=self.show_about, style="Secondary.TButton").pack(side="right")
 
         folder_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
         folder_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        ttk.Label(folder_card, text="FOLDER Z MUZYKĄ", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
+        ttk.Label(folder_card, text=tr("FOLDER Z MUZYKĄ"), style="Section.TLabel").pack(anchor="w", pady=(0, 8))
         folder_row = ttk.Frame(folder_card, style="Card.TFrame")
         folder_row.pack(fill="x")
         ttk.Entry(folder_row, textvariable=self.folder, style="App.TEntry", width=62).pack(side="left")
-        ttk.Button(folder_row, text="Wybierz folder…", command=self.choose, style="Secondary.TButton").pack(side="left", padx=(8, 0))
+        ttk.Button(folder_row, text=tr("Wybierz folder…"), command=self.choose, style="Secondary.TButton").pack(side="left", padx=(8, 0))
 
         settings_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
         settings_card.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        ttk.Label(settings_card, text="USTAWIENIA ANALIZY", style="Section.TLabel").pack(anchor="w", pady=(0, 8))
+        ttk.Label(settings_card, text=tr("USTAWIENIA ANALIZY"), style="Section.TLabel").pack(anchor="w", pady=(0, 8))
         controls = ttk.Frame(settings_card, style="Card.TFrame")
         controls.pack(fill="x")
-        ttk.Label(controls, text="Próg podobieństwa:", style="Body.TLabel").pack(side="left")
+        ttk.Label(controls, text=tr("Próg podobieństwa:"), style="Body.TLabel").pack(side="left")
         self.threshold_scale = ttk.Scale(controls, from_=0.65, to=0.98, variable=self.threshold,
                                          orient="horizontal", length=230)
         self.threshold_scale.pack(side="left", padx=10)
         self.th_label = ttk.Label(controls, text="82%", style="Value.TLabel", width=5)
         self.th_label.pack(side="left")
         self.threshold.trace_add("write", lambda *_: self.th_label.config(text=f"{self.threshold.get():.0%}"))
-        self.scan_btn = ttk.Button(controls, text="▶  Rozpocznij skanowanie", command=self.start_scan, style="Primary.TButton", width=24)
+        self.scan_btn = ttk.Button(controls, text=tr("▶  Rozpocznij skanowanie"), command=self.start_scan, style="Primary.TButton", width=24)
         self.scan_btn.pack(side="right")
-        self.stop_btn = ttk.Button(controls, text="■  Zatrzymaj", command=self.stop_scan, style="Danger.TButton", width=13, state="disabled")
+        self.stop_btn = ttk.Button(controls, text=tr("■  Zatrzymaj"), command=self.stop_scan, style="Danger.TButton", width=13, state="disabled")
         self.stop_btn.pack(side="right", padx=(0, 8))
-        ttk.Button(controls, text="Eksportuj CSV", command=self.export_csv, style="Secondary.TButton").pack(side="right", padx=(0, 8))
+        ttk.Button(controls, text=tr("Eksportuj CSV"), command=self.export_csv, style="Secondary.TButton").pack(side="right", padx=(0, 8))
         ttk.Label(settings_card, text="Niższy próg wykrywa więcej podobieństw, ale może zwiększyć liczbę fałszywych trafień.",
                   style="Hint.TLabel").pack(anchor="w", pady=(8, 0))
 
@@ -298,7 +342,7 @@ class App:
         results_card.grid(row=3, column=0, sticky="nsew")
         result_header = ttk.Frame(results_card, style="Card.TFrame")
         result_header.pack(fill="x", pady=(0, 8))
-        ttk.Label(result_header, text="WYNIKI ANALIZY", style="Section.TLabel").pack(side="left")
+        ttk.Label(result_header, text=tr("WYNIKI ANALIZY"), style="Section.TLabel").pack(side="left")
         self.count_label = ttk.Label(result_header, text="0 wyników", style="Hint.TLabel")
         self.count_label.pack(side="right")
 
@@ -308,9 +352,9 @@ class App:
         self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", selectmode="extended")
         for c, title, width in [("kind", "RODZAJ DOPASOWANIA", 280), ("similarity", "ZGODNOŚĆ", 100),
                                 ("quality", "JAKOŚĆ MP3", 125), ("size", "ROZMIAR", 100),
-                                ("path", "LOKALIZACJA PLIKU", 650)]:
+                                ("path", "LOKALIZACJA PLIKU", 500)]:
             self.tree.heading(c, text=title)
-            self.tree.column(c, width=width, minwidth=width, stretch=False, anchor="w")
+            self.tree.column(c, width=width, minwidth=70 if c == "path" else width, stretch=(c == "path"), anchor="w")
         yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
         xscroll = ttk.Scrollbar(results_card, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
@@ -323,12 +367,12 @@ class App:
 
         footer = ttk.Frame(self.main, style="App.TFrame")
         footer.grid(row=4, column=0, sticky="ew", pady=(10, 0))
-        ttk.Button(footer, text="Otwórz lokalizację", command=self.open_location, style="Secondary.TButton").pack(side="left")
-        self.play_btn = ttk.Button(footer, text="▶  Odsłuchaj 15 s", command=self.play_selected, style="Secondary.TButton")
+        ttk.Button(footer, text=tr("Otwórz lokalizację"), command=self.open_location, style="Secondary.TButton").pack(side="left")
+        self.play_btn = ttk.Button(footer, text=tr("▶  Odsłuchaj 15 s"), command=self.play_selected, style="Secondary.TButton")
         self.play_btn.pack(side="left", padx=(8, 0))
-        self.stop_play_btn = ttk.Button(footer, text="■  Stop audio", command=self.stop_playback, style="Secondary.TButton", state="disabled")
+        self.stop_play_btn = ttk.Button(footer, text=tr("■  Stop audio"), command=self.stop_playback, style="Secondary.TButton", state="disabled")
         self.stop_play_btn.pack(side="left", padx=8)
-        ttk.Button(footer, text="Przenieś zaznaczone do „Duplikaty”", command=self.move_selected,
+        ttk.Button(footer, text=tr("Przenieś zaznaczone do „Duplikaty”"), command=self.move_selected,
                    style="Danger.TButton").pack(side="left")
         statusbar = ttk.Frame(self.main, style="App.TFrame")
         statusbar.grid(row=5, column=0, sticky="ew", pady=(8, 0))
@@ -377,7 +421,7 @@ class App:
         self.style.configure("Danger.TButton", background=p["surface"], foreground="#DC2626",
                              padding=(10, 8), borderwidth=1, bordercolor=p["border"])
         self.style.map("Danger.TButton", background=[("active", p["border"])])
-        self.theme_btn.configure(text="☀  Tryb jasny" if self.theme_name == "dark" else "☾  Tryb ciemny")
+        self.theme_btn.configure(text=("☀  " + tr("Tryb jasny")) if self.theme_name == "dark" else ("☾  " + tr("Tryb ciemny")))
 
     def toggle_theme(self):
         self.theme_name = "dark" if self.theme_name == "light" else "light"
@@ -410,7 +454,7 @@ class App:
         ttk.Button(frame, text="Zamknij", command=win.destroy, style="Primary.TButton").pack(anchor="e")
 
     def choose(self):
-        path = filedialog.askdirectory(title="Wybierz folder z plikami MP3", initialdir=self.folder.get() if Path(self.folder.get()).is_dir() else None)
+        path = filedialog.askdirectory(title=tr("Wybierz folder z plikami MP3"), initialdir=self.folder.get() if Path(self.folder.get()).is_dir() else None)
         if path:
             self.folder.set(path)
             self.save_settings()
@@ -424,7 +468,7 @@ class App:
     def start_scan(self):
         folder = self.folder.get().strip()
         if not folder or not Path(folder).is_dir():
-            messagebox.showwarning(APP_TITLE, "Najpierw wybierz prawidłowy folder.")
+            messagebox.showwarning(APP_TITLE, tr("Najpierw wybierz prawidłowy folder."))
             return
         ffmpeg = bundled_tool("ffmpeg.exe") or bundled_tool("ffmpeg")
         fpcalc = bundled_tool("fpcalc.exe") or bundled_tool("fpcalc")
@@ -710,7 +754,7 @@ class App:
 
     def export_csv(self):
         if not self.scanned_items:
-            messagebox.showinfo(APP_TITLE, "Brak zeskanowanych plików MP3 do eksportu.")
+            messagebox.showinfo(APP_TITLE, tr("Brak zeskanowanych plików MP3 do eksportu."))
             return
         scan_folder = Path(self.folder.get()).expanduser()
         initial_dir = scan_folder if scan_folder.is_dir() else Path.home()
