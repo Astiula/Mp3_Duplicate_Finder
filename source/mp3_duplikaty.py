@@ -270,6 +270,7 @@ class App:
         self.events = queue.Queue()
         self.results = []
         self.scanned_items = []
+        self.cache_items = {}
         self.folder = tk.StringVar()
         self.status = tk.StringVar(value="Wybierz folder z muzyką, aby rozpocząć.")
         self.threshold = tk.DoubleVar(value=0.82)
@@ -385,8 +386,10 @@ class App:
         export = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         export.grid(row=0, column=2, sticky="nsew", padx=7)
         ttk.Label(export, text=tr("Raport"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        ttk.Button(export, text="📂  " + tr("Wczytaj CSV"), command=self.import_csv,
+                   style="Folder.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(5, 2))
         ttk.Button(export, text="📄  " + tr("Eksportuj CSV"), command=self.export_csv,
-                   style="Export.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(10, 0))
+                   style="Export.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(2, 0))
 
         # Group 4 — preview and navigation.
         audio = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
@@ -643,10 +646,12 @@ class App:
             self.dashboard_status.set("SKANOWANIE")
             self.dashboard_results.set("…")
         threshold = float(self.threshold.get())
+        cached_items = dict(self.cache_items)
         threading.Thread(target=self._scan_worker,
-                         args=(Path(folder), ffmpeg, fpcalc, threshold), daemon=True).start()
+                         args=(Path(folder), ffmpeg, fpcalc, threshold, cached_items), daemon=True).start()
 
-    def _scan_worker(self, folder, ffmpeg, fpcalc, threshold):
+    def _scan_worker(self, folder, ffmpeg, fpcalc, threshold, cached_items=None):
+        cached_items = cached_items or {}
         try:
             files = []
             for candidate in folder.rglob("*"):
@@ -662,12 +667,20 @@ class App:
                 if self.cancel_event.is_set():
                     break
                 try:
-                    decoded = decode_audio(path, ffmpeg, self.cancel_event)
-                    audio_hash = hashlib.sha256(decoded).hexdigest()
-                    fingerprint = chromaprint_signature(path, fpcalc, self.cancel_event)
-                    items.append({"path": path, "hash": audio_hash, "fp": fingerprint,
-                                  "size": path.stat().st_size, "tags": read_id3_tags(path),
-                                  "quality": read_mp3_quality(path)})
+                    stat = path.stat()
+                    cached = cached_items.get(str(path.resolve()))
+                    if cached and cached.get("size") == stat.st_size and cached.get("mtime_ns") == stat.st_mtime_ns and cached.get("hash") and cached.get("fp"):
+                        item = dict(cached)
+                        item["path"] = path
+                        item["size"] = stat.st_size
+                    else:
+                        decoded = decode_audio(path, ffmpeg, self.cancel_event)
+                        audio_hash = hashlib.sha256(decoded).hexdigest()
+                        fingerprint = chromaprint_signature(path, fpcalc, self.cancel_event)
+                        item = {"path": path, "hash": audio_hash, "fp": fingerprint,
+                                "size": stat.st_size, "mtime_ns": stat.st_mtime_ns,
+                                "tags": read_id3_tags(path), "quality": read_mp3_quality(path)}
+                    items.append(item)
                 except Exception as exc:
                     self.events.put(("status", f"Pominięto {path.name}: {exc}"))
                 self.events.put(("progress", "Skanowanie plików", i, len(files)))
@@ -749,6 +762,8 @@ class App:
                         continue
                     self.results = rows
                     self.scanned_items = inventory
+                    self.cache_items = {str(Path(item["path"]).resolve()): item for item in inventory
+                                        if item.get("hash") and item.get("fp")}
                     seen = set()
                     duplicate_paths = {str(item["path"]) for item, *_ in rows}
                     for item, kind, score, lower_quality in rows:
@@ -919,6 +934,86 @@ class App:
         messagebox.showinfo(APP_TITLE, f"Przeniesiono plików: {moved}.")
         self.status.set(f"Przeniesiono plików: {moved}.")
 
+    def import_csv(self):
+        if self.is_scanning:
+            messagebox.showinfo(APP_TITLE, "Zatrzymaj skanowanie przed wczytaniem bazy CSV.")
+            return
+        source = filedialog.askopenfilename(
+            title="Wczytaj bazę skanowania CSV",
+            filetypes=[("Pliki CSV", "*.csv"), ("Wszystkie pliki", "*.*")],
+            initialdir=str(Path(self.folder.get()).expanduser()) if Path(self.folder.get()).expanduser().is_dir() else str(Path.home()))
+        if not source:
+            return
+        imported = []
+        reusable = {}
+        try:
+            with open(source, "r", newline="", encoding="utf-8-sig") as f:
+                sample = f.read(4096)
+                f.seek(0)
+                try:
+                    dialect = csv.Sniffer().sniff(sample, delimiters=";,\\t")
+                except csv.Error:
+                    dialect = csv.excel
+                    dialect.delimiter = ";"
+                reader = csv.DictReader(f, dialect=dialect)
+                for row in reader:
+                    raw_path = (row.get("_path") or "").strip()
+                    if not raw_path:
+                        directory = (row.get("Lokalizacja") or row.get("Location") or "").strip()
+                        filename = (row.get("Nazwa") or row.get("File name") or "").strip()
+                        raw_path = str(Path(directory) / filename) if directory and filename else ""
+                    if not raw_path:
+                        continue
+                    path = Path(raw_path).expanduser()
+                    tags = {}
+                    try:
+                        tags = json.loads(row.get("_tags_json") or "{}")
+                    except (ValueError, TypeError):
+                        pass
+                    try:
+                        size = int(row.get("_size_bytes") or 0)
+                        mtime_ns = int(row.get("_mtime_ns") or 0)
+                        bitrate = int(float(row.get("_bitrate") or 0))
+                        sample_rate = int(float(row.get("_sample_rate") or 0))
+                        duration = float(row.get("_duration") or 0)
+                        audio_hash = (row.get("_audio_hash") or "").strip()
+                        fp_text = (row.get("_fingerprint") or "").strip()
+                        fingerprint = [int(v) for v in fp_text.split(",") if v.strip()]
+                    except (ValueError, TypeError):
+                        size, mtime_ns, bitrate, sample_rate, duration = 0, 0, 0, 0, 0.0
+                        audio_hash, fingerprint = "", []
+                    item = {"path": path, "size": size, "mtime_ns": mtime_ns,
+                            "hash": audio_hash, "fp": (duration, fingerprint),
+                            "tags": tags, "quality": {"bitrate": bitrate,
+                            "sample_rate": sample_rate, "length": duration}}
+                    imported.append(item)
+                    if audio_hash and fingerprint and size and mtime_ns:
+                        reusable[str(path.resolve())] = item
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"Nie udało się wczytać CSV:\\n{exc}")
+            return
+        if not imported:
+            messagebox.showwarning(APP_TITLE, "Plik CSV nie zawiera rozpoznawalnych wpisów biblioteki.")
+            return
+        self.cache_items = reusable
+        self.scanned_items = imported
+        self.results = []
+        self.tree.delete(*self.tree.get_children())
+        self.count_label.configure(text=f"Wczytano bazę: {len(imported)} plików")
+        valid_paths = sum(1 for item in imported if item["path"].is_file())
+        self.scan_counts.set(f"Baza CSV: {len(imported)}  |  Pliki dostępne: {valid_paths}")
+        old_format = len(reusable) == 0
+        self.status.set(
+            f"Wczytano {len(imported)} rekordów. Ponownie użyję danych {len(reusable)} niezmienionych plików."
+            if not old_format else
+            f"Wczytano {len(imported)} rekordów ze starszego CSV. Brak odcisków audio — pliki trzeba przeskanować.")
+        if old_format:
+            messagebox.showinfo(APP_TITLE,
+                "To starszy format CSV bez odcisków audio. Dane opisowe zostały wczytane, ale przy następnym skanowaniu pliki będą analizowane ponownie.")
+        else:
+            messagebox.showinfo(APP_TITLE,
+                f"Wczytano {len(imported)} plików.\\nDane audio można ponownie wykorzystać dla {len(reusable)} plików, jeśli ich rozmiar i data modyfikacji się nie zmieniły.")
+
     def export_csv(self):
         if not self.scanned_items:
             messagebox.showinfo(APP_TITLE, tr("Brak zeskanowanych plików MP3 do eksportu."))
@@ -942,19 +1037,32 @@ class App:
                 duplicate_types[key] = value
         with open(dest, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow([tr("Nazwa"), tr("Lokalizacja"), tr("Tagi MP3"), tr("Bitrate (kb/s)"), tr("Duplikat")])
+            writer.writerow([tr("Nazwa"), tr("Lokalizacja"), tr("Tagi MP3"), tr("Bitrate (kb/s)"),
+                             tr("Duplikat"), "_path", "_size_bytes", "_mtime_ns", "_audio_hash",
+                             "_duration", "_fingerprint", "_bitrate", "_sample_rate", "_tags_json"])
             for item in sorted(self.scanned_items, key=lambda x: str(x["path"]).casefold()):
                 path = Path(item["path"])
+                try:
+                    stat = path.stat()
+                    size, mtime_ns = stat.st_size, stat.st_mtime_ns
+                except OSError:
+                    size, mtime_ns = item.get("size", 0), item.get("mtime_ns", 0)
                 tags = item.get("tags", {})
                 tag_text = " | ".join(
                     f"{tag_names[key]}: {tags[key]}" for key in tag_names if tags.get(key)
                 )
-                bitrate = item.get("quality", {}).get("bitrate", 0)
-                duplicate_label = duplicate_types.get(str(path), "Nie")
+                quality = item.get("quality", {})
+                bitrate = quality.get("bitrate", 0)
+                fp = item.get("fp", (0, []))
                 writer.writerow([path.name, str(path.parent), tag_text,
-                    f"{bitrate / 1000:.0f}" if bitrate else "", duplicate_label])
+                    f"{bitrate / 1000:.0f}" if bitrate else "",
+                    duplicate_types.get(str(path), "Nie"), str(path), size, mtime_ns,
+                    item.get("hash", ""), fp[0] if fp else 0,
+                    ",".join(str(v) for v in (fp[1] if fp and len(fp) > 1 else [])),
+                    bitrate, quality.get("sample_rate", 0), json.dumps(tags, ensure_ascii=False)])
         messagebox.showinfo(APP_TITLE,
-            f"Zapisano raport CSV. Liczba plików: {len(self.scanned_items)}.")
+            f"Zapisano bazę CSV. Liczba plików: {len(self.scanned_items)}. Plik zawiera też dane do pominięcia ponownej analizy niezmienionych nagrań.")
+
 
 def main():
     root = tk.Tk()
