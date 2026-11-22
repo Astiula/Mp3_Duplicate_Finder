@@ -989,6 +989,10 @@ class App:
                     imported.append(item)
                     if audio_hash and fingerprint and size and mtime_ns:
                         reusable[str(path.resolve())] = item
+                    duplicate_label = (row.get("Duplikat") or row.get("Duplicate") or "").strip()
+                    if duplicate_label.startswith("TAK") or duplicate_label.upper().startswith("YES"):
+                        kind = "Identyczna zawartość audio" if "identyczny" in duplicate_label.lower() or "identical" in duplicate_label.lower() else "Podobny utwór (z importowanego raportu)"
+                        self.results.append((item, kind, "100.0%" if kind == "Identyczna zawartość audio" else "", False))
         except Exception as exc:
             messagebox.showerror(APP_TITLE, f"Nie udało się wczytać CSV:\\n{exc}")
             return
@@ -997,9 +1001,21 @@ class App:
             return
         self.cache_items = reusable
         self.scanned_items = imported
-        self.results = []
         self.tree.delete(*self.tree.get_children())
-        self.count_label.configure(text=f"Wczytano bazę: {len(imported)} plików")
+        for item, kind, score, lower_quality in self.results:
+            path = Path(item["path"])
+            self.tree.insert("", "end", values=(kind, score, quality_label(item),
+                f'{item.get("size", 0) / 1024 / 1024:.1f} MB', str(path)),
+                tags=("lower_quality",) if lower_quality else ())
+        if imported:
+            try:
+                common_folder = Path(os.path.commonpath([str(Path(item["path"]).resolve().parent) for item in imported]))
+                if common_folder.is_dir():
+                    self.folder.set(str(common_folder))
+                    self.save_settings()
+            except (ValueError, OSError):
+                pass
+        self.count_label.configure(text=f"Wczytano bazę: {len(imported)} plików · duplikaty: {len(self.results)}")
         valid_paths = sum(1 for item in imported if item["path"].is_file())
         self.scan_counts.set(f"Baza CSV: {len(imported)}  |  Pliki dostępne: {valid_paths}")
         old_format = len(reusable) == 0
