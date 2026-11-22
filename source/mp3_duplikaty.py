@@ -56,6 +56,25 @@ TRANSLATIONS = {
     "Duplikat": "Duplicate", "Tytuł": "Title", "Wykonawca": "Artist",
     "Numer utworu": "Track number", "Rok": "Year", "Gatunek": "Genre",
     "TAK — identyczny": "YES — identical", "TAK — podobny": "YES — similar", "Nie": "No",
+    "Bitrate (kb/s)": "Bitrate (kb/s)",
+    "Skanowanie zatrzymane przez użytkownika.": "Scan stopped by user.",
+    "Nie można odczytać dźwięku": "Unable to decode audio",
+    "Błąd fpcalc": "fpcalc error",
+    "fpcalc nie zwrócił odcisku audio.": "fpcalc did not return an audio fingerprint.",
+    "tytuł": "title", "Wyszukiwanie plików MP3…": "Searching for MP3 files…",
+    "Skanowanie plików": "Scanning files", "Identyczna zawartość audio": "Identical audio content",
+    "Porównywanie odcisków audio…": "Comparing audio fingerprints…",
+    "Błąd analizy": "Scan error", "Wystąpił błąd podczas analizy.": "An error occurred during the scan.",
+    "Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki.": "Scan stopped. Results collected so far are displayed.",
+    "Zakończono. Sprawdź wyniki przed przenoszeniem.": "Finished. Review the results before moving files.",
+    "Zakończono. Nie znaleziono dopasowań.": "Finished. No matches found.",
+    "Odsłuch próbek jest dostępny w wersji Windows.": "Audio preview is available in the Windows version.",
+    "Zaznacz plik MP3 na liście wyników.": "Select an MP3 file in the results list.",
+    "Wybrany plik już nie istnieje.": "The selected file no longer exists.",
+    "Odsłuch zakończony.": "Preview finished.", "Odsłuch zatrzymany.": "Preview stopped.",
+    "Nie udało się przygotować próbki audio.": "Could not prepare the audio preview.",
+    "Zaznacz plik na liście wyników.": "Select a file in the results list.",
+    "Zaznacz pliki na liście.": "Select files in the list.",
 }
 
 
@@ -488,7 +507,7 @@ class App:
         self.stop_btn.configure(state="normal")
         self.progress.configure(mode="determinate", maximum=1, value=0)
         self.scan_counts.set("Znalezione pliki: 0  |  Przeskanowane: 0/0")
-        self.status.set("Wyszukiwanie plików MP3…")
+        self.status.set(tr("Wyszukiwanie plików MP3…"))
         self.tree.delete(*self.tree.get_children())
         self.results = []
         self.scanned_items = []
@@ -570,7 +589,7 @@ class App:
                     _, total_pairs, scanned = msg
                     self.progress.configure(mode="determinate", maximum=max(total_pairs, 1), value=0)
                     self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: {scanned}/{scanned}")
-                    self.status.set("Porównywanie odcisków audio…")
+                    self.status.set(tr("Porównywanie odcisków audio…"))
                 elif msg[0] == "compare_progress":
                     _, current, total_pairs, scanned = msg
                     self.progress.configure(maximum=max(total_pairs, 1), value=current)
@@ -587,9 +606,9 @@ class App:
                     self.stop_btn.configure(state="disabled")
                     self.is_scanning = False
                     if error:
-                        self.count_label.configure(text="Błąd analizy")
+                        self.count_label.configure(text=tr("Błąd analizy"))
                         self.scan_counts.set("Znalezione pliki: 0  |  Przeskanowane: 0/0")
-                        self.status.set("Wystąpił błąd podczas analizy.")
+                        self.status.set(tr("Wystąpił błąd podczas analizy."))
                         messagebox.showerror(APP_TITLE, error)
                         continue
                     self.results = rows
@@ -612,9 +631,9 @@ class App:
                     self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {selected_files} plików z duplikatami")
                     found_files = len({str(item["path"]) for item, _, _, _ in rows})
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
-                    self.status.set("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki." if cancelled else "Zakończono. Sprawdź wyniki przed przenoszeniem.")
+                    self.status.set(tr("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki.") if cancelled else tr("Zakończono. Sprawdź wyniki przed przenoszeniem."))
                     if not seen and not cancelled:
-                        self.status.set("Zakończono. Nie znaleziono dopasowań.")
+                        self.status.set(tr("Zakończono. Nie znaleziono dopasowań."))
                     if not cancelled and total > 0:
                         if messagebox.askyesno(APP_TITLE,
                             f"Skanowanie zakończone. Przeskanowano {ok} plików MP3.\\n\\nCzy wygenerować plik CSV z nazwą, lokalizacją, tagami MP3 i bitrate?"):
@@ -628,11 +647,11 @@ class App:
 
     def play_selected(self):
         if winsound is None:
-            messagebox.showerror(APP_TITLE, "Odsłuch próbek jest dostępny w wersji Windows.")
+            messagebox.showerror(APP_TITLE, tr("Odsłuch próbek jest dostępny w wersji Windows."))
             return
         paths = self.selected_paths()
         if not paths:
-            messagebox.showinfo(APP_TITLE, "Zaznacz plik MP3 na liście wyników.")
+            messagebox.showinfo(APP_TITLE, tr("Zaznacz plik MP3 na liście wyników."))
             return
         path = paths[0]
         if not path.is_file():
@@ -713,7 +732,7 @@ class App:
     def open_location(self):
         paths = self.selected_paths()
         if not paths:
-            messagebox.showinfo(APP_TITLE, "Zaznacz plik na liście wyników.")
+            messagebox.showinfo(APP_TITLE, tr("Zaznacz plik na liście wyników."))
             return
         path = paths[0]
         try:
@@ -729,7 +748,7 @@ class App:
     def move_selected(self):
         paths = self.selected_paths()
         if not paths:
-            messagebox.showinfo(APP_TITLE, "Zaznacz pliki na liście.")
+            messagebox.showinfo(APP_TITLE, tr("Zaznacz pliki na liście."))
             return
         if not messagebox.askyesno(APP_TITLE, f"Przenieść {len(paths)} zaznaczonych plików do podfolderu „Duplikaty”?"):
             return
