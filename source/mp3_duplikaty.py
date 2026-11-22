@@ -447,6 +447,7 @@ class App:
         self.status.set("Wyszukiwanie plików MP3…")
         self.tree.delete(*self.tree.get_children())
         self.results = []
+        self.scanned_items = []
         self.count_label.configure(text="Analiza w toku…")
         threshold = float(self.threshold.get())
         threading.Thread(target=self._scan_worker,
