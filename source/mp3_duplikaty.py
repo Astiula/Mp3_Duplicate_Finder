@@ -87,7 +87,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.3"
+APP_VERSION = "1.5.4"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -136,7 +136,7 @@ def run_cancellable(cmd, cancel_event, text=False):
         if cancel_event.is_set():
             p.terminate()
             try:
-                p.wait(timeout=3)
+                p.wait(timeout=0.25)
             except subprocess.TimeoutExpired:
                 p.kill()
             raise InterruptedError("Skanowanie zatrzymane przez użytkownika.")
@@ -376,10 +376,10 @@ class App:
         scan_buttons = ttk.Frame(scan, style="RibbonGroup.TFrame")
         scan_buttons.pack(fill="x")
         self.scan_btn = ttk.Button(scan_buttons, text=tr("▶  Skanuj"), command=self.start_scan,
-                                   style="Primary.TButton")
+                                   style="Scan.TButton" if self.design == "glassy_modern" else "Primary.TButton")
         self.scan_btn.pack(side="left", fill="x", expand=True)
         self.stop_btn = ttk.Button(scan_buttons, text=tr("■  Stop"), command=self.stop_scan,
-                                   style="Danger.TButton", state="disabled")
+                                   style="Stop.TButton" if self.design == "glassy_modern" else "Danger.TButton", state="disabled")
         self.stop_btn.pack(side="left", padx=(5, 0))
 
         # Group 3 — export.
@@ -387,7 +387,7 @@ class App:
         export.grid(row=0, column=2, sticky="nsew", padx=7)
         ttk.Label(export, text=tr("Raport"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
         ttk.Button(export, text="📄  " + tr("Eksportuj CSV"), command=self.export_csv,
-                   style="RibbonSmall.TButton").pack(fill="x", expand=True, pady=(10, 0))
+                   style="Export.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(10, 0))
 
         # Group 4 — preview and navigation.
         audio = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
@@ -396,20 +396,20 @@ class App:
         audio_row = ttk.Frame(audio, style="RibbonGroup.TFrame")
         audio_row.pack(fill="x", expand=True, pady=(4, 0))
         self.play_btn = ttk.Button(audio_row, text="🎵  " + tr("Odsłuch 15 s"), command=self.play_selected,
-                                   style="RibbonSmall.TButton")
+                                   style="Play.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton")
         self.play_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
         self.stop_play_btn = ttk.Button(audio_row, text="⏹  " + tr("Stop audio"), command=self.stop_playback,
                                         style="RibbonSmall.TButton", state="disabled")
         self.stop_play_btn.pack(side="left", fill="x", expand=True, padx=3)
         ttk.Button(audio_row, text="📂  " + tr("Otwórz folder"), command=self.open_location,
-                   style="RibbonSmall.TButton").pack(side="left", fill="x", expand=True, padx=(3, 0))
+                   style="Folder.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(side="left", fill="x", expand=True, padx=(3, 0))
 
         # Group 5 — file management.
         manage = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         manage.grid(row=0, column=4, sticky="nsew", padx=(7, 0))
         ttk.Label(manage, text=tr("Zarządzanie"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
         ttk.Button(manage, text="✨  " + tr("Przenieś do Duplikaty"),
-                   command=self.move_selected, style="RibbonSmall.TButton").pack(
+                   command=self.move_selected, style="Manage.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(
                        fill="x", expand=True, pady=(10, 0))
 
         # Short explanatory line under the ribbon.
@@ -552,8 +552,15 @@ class App:
         self.style.map("Treeview", background=[("selected", p["selected"])],
                        foreground=[("selected", p["text"])])
         primary_pad = (10, 6) if self.design in ("classic", "explorer") else (15, 10)
-        self.style.configure("Primary.TButton", background=p["accent"], foreground="#FFFFFF",
+        self.style.configure("Primary.TButton", background="#16A36A" if self.design == "glassy_modern" else p["accent"], foreground="#FFFFFF",
                              padding=primary_pad, borderwidth=0, font=(base_font, 9, "bold"))
+        if self.design == "glassy_modern":
+            colors = {"Scan": "#16A36A", "Stop": "#E34B5B", "Play": "#168BDB",
+                      "Export": "#8056D9", "Folder": "#0F9DAD", "Manage": "#E58A27"}
+            for name, color in colors.items():
+                self.style.configure(name + ".TButton", background=color, foreground="#FFFFFF",
+                                     padding=(10, 8), borderwidth=0, font=(base_font, 9, "bold"))
+                self.style.map(name + ".TButton", background=[("active", color)])
         self.style.map("Primary.TButton", background=[("active", p["accent_hover"]), ("disabled", p["border"])])
         self.style.configure("Secondary.TButton", background=p["surface"], foreground=p["text"],
                              padding=(10, 8), borderwidth=1, bordercolor=p["border"])
@@ -810,9 +817,10 @@ class App:
         try:
             fd, wav_path = tempfile.mkstemp(prefix="mp3df_preview_", suffix=".wav")
             os.close(fd)
-            cmd = [ffmpeg, "-y", "-v", "error", "-i", str(path), "-t", "15",
-                   "-vn", "-ac", "2", "-ar", "44100", "-sample_fmt", "s16", wav_path]
-            process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+            cmd = [ffmpeg, "-nostdin", "-y", "-v", "error", "-threads", "1",
+                   "-i", str(path), "-t", "15", "-vn", "-ac", "2",
+                   "-ar", "44100", "-sample_fmt", "s16", wav_path]
+            process = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
             with self.playback_lock:
                 self.playback_process = process
@@ -826,12 +834,14 @@ class App:
                     message = "Odsłuch zatrzymany."
                     return
             if process.returncode != 0:
-                error = process.stderr.read().decode("utf-8", "ignore")[-300:]
-                raise RuntimeError(error or "Nie udało się przygotować próbki audio.")
+                raise RuntimeError("Nie udało się przygotować próbki audio.")
             if not stop_event.is_set():
-                winsound.PlaySound(wav_path, winsound.SND_FILENAME)
-                if stop_event.is_set():
+                winsound.PlaySound(wav_path, winsound.SND_FILENAME | winsound.SND_ASYNC)
+                if stop_event.wait(15):
+                    winsound.PlaySound(None, winsound.SND_PURGE)
                     message = "Odsłuch zatrzymany."
+                else:
+                    winsound.PlaySound(None, winsound.SND_PURGE)
         except Exception as exc:
             message = f"Błąd odsłuchu: {exc}"
         finally:
