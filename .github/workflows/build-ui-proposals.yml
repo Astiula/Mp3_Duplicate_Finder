@@ -1,0 +1,130 @@
+name: Build five UI proposals
+
+on:
+  push:
+    branches: [ui-five-proposals]
+
+permissions:
+  contents: read
+
+jobs:
+  build-five-interfaces:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: python -m pip install --upgrade pip pyinstaller mutagen
+
+      - name: Download and verify Chromaprint
+        shell: pwsh
+        run: |
+          $url = "https://github.com/acoustid/chromaprint/releases/download/v1.6.1/chromaprint-fpcalc-1.6.1-windows-x86_64.zip"
+          Invoke-WebRequest -Uri $url -OutFile fpcalc.zip
+          $hash = (Get-FileHash fpcalc.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "735d6182b38e9f364b84ce6f4ccd682c75e2851de89735711d6b762d12b92a4e") { throw "Chromaprint checksum mismatch" }
+          Expand-Archive fpcalc.zip -DestinationPath fpcalc
+          $fp = Get-ChildItem fpcalc -Filter fpcalc.exe -Recurse | Select-Object -First 1
+          if (!$fp) { throw "fpcalc.exe not found" }
+          Copy-Item $fp.FullName "fpcalc.exe"
+
+      - name: Download and verify FFmpeg
+        shell: pwsh
+        run: |
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Invoke-WebRequest -Uri "$url.sha256" -OutFile ffmpeg.sha256
+          $expected = ((Get-Content ffmpeg.sha256 -Raw).Trim() -split '\s+')[0].ToLower()
+          $actual = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) { throw "FFmpeg checksum mismatch" }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract
+          $ff = Get-ChildItem ffmpeg_extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          if (!$ff) { throw "ffmpeg.exe not found" }
+          Copy-Item $ff.FullName "ffmpeg.exe"
+
+      - name: Build five standalone EXE files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "dist-five" | Out-Null
+          @'
+          VSVersionInfo(
+            ffi=FixedFileInfo(filevers=(1, 5, 2, 0), prodvers=(1, 5, 2, 0),
+              mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+            kids=[
+              StringFileInfo([StringTable('040904B0', [
+                StringStruct('CompanyName', 'Konrad Astachow (Kondar)'),
+                StringStruct('FileDescription', 'MP3 Duplicate Finder'),
+                StringStruct('FileVersion', '1.5.2'),
+                StringStruct('InternalName', 'Mp3_Duplicate_Finder'),
+                StringStruct('ProductName', 'MP3 Duplicate Finder'),
+                StringStruct('ProductVersion', '1.5.2'),
+                StringStruct('LegalCopyright', 'Copyright 2026 Konrad Astachow (Kondar)')
+              ])]),
+              VarFileInfo([VarStruct('Translation', [1033, 1200])])
+            ]
+          )
+          '@ | Set-Content -Encoding utf8 version_info.txt
+
+          $variants = @(
+            @{ Key = "fluent";   Name = "01_Fluent" },
+            @{ Key = "classic";  Name = "02_Classic" },
+            @{ Key = "dark_pro"; Name = "03_Dark_PRO" },
+            @{ Key = "dashboard";Name = "04_Dashboard" },
+            @{ Key = "explorer"; Name = "05_Explorer" }
+          )
+
+          foreach ($variant in $variants) {
+            $source = "source/mp3_duplikaty.py"
+            $buildSource = "mp3_duplikaty_$($variant.Key).py"
+            Copy-Item $source $buildSource
+            $python = @"
+          from pathlib import Path
+          p = Path("$buildSource")
+          s = p.read_text(encoding="utf-8")
+          old = 'UI_DESIGN = "fluent"'
+          new = 'UI_DESIGN = "$($variant.Key)"'
+          assert old in s, "UI_DESIGN marker not found"
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
+          "@
+            $python | python -
+            $exeName = "Mp3_Duplicate_Finder_$($variant.Name)"
+            pyinstaller --noconfirm --clean --onefile --windowed --noupx --name $exeName --distpath dist-five --workpath "build-$($variant.Key)" --specpath "spec-$($variant.Key)" --version-file version_info.txt --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." $buildSource
+            if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed for $($variant.Key)" }
+            $exe = "dist-five/$exeName.exe"
+            if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Missing or invalid executable: $exe" }
+          }
+
+          @'
+          PIĘĆ WARIANTÓW INTERFEJSU — MP3 DUPLICATE FINDER 1.5.2
+
+          01_Fluent — Windows 11 / Fluent, jasny i ciemny motyw.
+          02_Classic — klasyczny, kompaktowy układ i bardziej techniczna stylistyka.
+          03_Dark_PRO — ciemny interfejs z turkusowym akcentem.
+          04_Dashboard — pulpit z kartami statusu i progu analizy.
+          05_Explorer — stonowany, kompaktowy układ w stylu Eksploratora.
+
+          Wszystkie wersje zawierają te same funkcje analizy i skanowania.
+          Każdy plik EXE jest samodzielny (PyInstaller onefile) i zawiera FFmpeg
+          oraz Chromaprint. Pliki są niepodpisane, o ile repozytorium nie ma
+          skonfigurowanego certyfikatu Authenticode.
+          '@ | Set-Content -Encoding utf8 dist-five/README_WARIANTY.txt
+
+          Get-ChildItem dist-five -Filter "*.exe" | Get-FileHash -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $($_.Path | Split-Path -Leaf)" } |
+            Set-Content -Encoding ascii dist-five/SHA256SUMS.txt
+
+          if ((Get-ChildItem dist-five -Filter "*.exe").Count -ne 5) { throw "Expected exactly five EXE files" }
+
+      - name: Upload all five EXE variants
+        uses: actions/upload-artifact@v7
+        with:
+          name: Mp3_Duplicate_Finder-5-UI-Proposals
+          path: dist-five/
+          if-no-files-found: error
+          retention-days: 30
