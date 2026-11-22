@@ -87,7 +87,8 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.5.2"
+UI_DESIGN = "fluent"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
@@ -277,7 +278,8 @@ class App:
         self.playback_stop_event = threading.Event()
         self.playback_process = None
         self.playback_lock = threading.Lock()
-        self.theme_name = self.load_theme()
+        self.design = UI_DESIGN
+        self.theme_name = "dark" if self.design == "dark_pro" else self.load_theme()
         self.last_folder = self.load_last_folder()
         if self.last_folder:
             self.folder.set(self.last_folder)
@@ -323,7 +325,9 @@ class App:
         titlebar = ttk.Frame(self.root, style="App.TFrame", padding=(14, 8, 14, 6))
         titlebar.grid(row=0, column=0, sticky="ew")
         titlebar.grid_columnconfigure(0, weight=1)
-        ttk.Label(titlebar, text="MP3 DUPLICATE FINDER", style="RibbonTitle.TLabel").grid(row=0, column=0, sticky="w")
+        design_titles = {"fluent": "FLUENT DESIGN", "classic": "CLASSIC", "dark_pro": "DARK PRO", "dashboard": "DASHBOARD", "explorer": "EXPLORER"}
+        ttk.Label(titlebar, text="MP3 DUPLICATE FINDER  ·  " + design_titles.get(UI_DESIGN, "FLUENT DESIGN"),
+                  style="RibbonTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(titlebar, text=f"v{APP_VERSION}", style="RibbonVersion.TLabel").grid(row=0, column=1, padx=(8, 16))
         self.theme_btn = ttk.Button(titlebar, text="☾  " + tr("Tryb ciemny"),
                                     command=self.toggle_theme, style="RibbonSmall.TButton")
@@ -455,9 +459,18 @@ class App:
         self.progress.grid(row=0, column=2)
 
     def apply_theme(self):
-        p = self.PALETTES[self.theme_name]
+        p = dict(self.PALETTES[self.theme_name])
+        design_colors = {
+            "fluent": {},
+            "classic": {"bg": "#E9EDF2", "surface": "#F8FAFC", "text": "#1F2937", "muted": "#526273", "accent": "#075985", "accent_hover": "#0C4A6E", "border": "#B8C4D1", "tree": "#FFFFFF", "selected": "#D7E7F5"},
+            "dark_pro": {"bg": "#0B1220", "surface": "#121D2E", "text": "#E5EDF7", "muted": "#91A4BC", "accent": "#22D3EE", "accent_hover": "#06B6D4", "border": "#26364D", "tree": "#0E1929", "selected": "#164E63"},
+            "dashboard": {"bg": "#F4F2FA", "surface": "#FFFFFF", "text": "#24213A", "muted": "#716B87", "accent": "#6D4AFF", "accent_hover": "#5636D9", "border": "#E1DDF0", "tree": "#FFFFFF", "selected": "#E9E3FF"},
+            "explorer": {"bg": "#F1F4F6", "surface": "#FFFFFF", "text": "#202B36", "muted": "#657482", "accent": "#0F766E", "accent_hover": "#115E59", "border": "#D5DDE3", "tree": "#FFFFFF", "selected": "#D9F0EC"}
+        }
+        p.update(design_colors.get(self.design, {}))
         self.root.configure(bg=p["bg"])
-        self.style.configure(".", font=("Segoe UI", 10))
+        base_font = "Arial" if self.design == "classic" else "Segoe UI"
+        self.style.configure(".", font=(base_font, 10))
         self.style.configure("App.TFrame", background=p["bg"])
         self.style.configure("Card.TFrame", background=p["surface"], borderwidth=1, relief="solid",
                              bordercolor=p["border"])
@@ -493,9 +506,10 @@ class App:
                              font=("Segoe UI", 9, "bold"))
         self.style.configure("ResultsTitle.TLabel", background=p["bg"], foreground=p["text"],
                              font=("Segoe UI", 11, "bold"))
+        button_pad = (5, 4) if self.design in ("classic", "explorer") else (9, 7)
         self.style.configure("RibbonSmall.TButton", background=p["surface"], foreground=p["text"],
-                             padding=(7, 6), borderwidth=1, bordercolor=p["border"],
-                             font=("Segoe UI", 9))
+                             padding=button_pad, borderwidth=1, bordercolor=p["border"],
+                             font=(base_font, 9))
         self.style.map("RibbonSmall.TButton", background=[("active", p["border"])])
         self.style.configure("RibbonLarge.TButton", background=p["surface"], foreground=p["text"],
                              padding=(5, 6), borderwidth=1, bordercolor=p["border"],
@@ -509,15 +523,18 @@ class App:
                              insertcolor=p["text"], bordercolor=p["border"], padding=8)
         self.style.configure("TScale", background=p["surface"], troughcolor=p["border"])
         self.style.configure("TProgressbar", troughcolor=p["border"], background=p["accent"])
+        row_height = 24 if self.design in ("classic", "explorer") else (34 if self.design == "dashboard" else 30)
         self.style.configure("Treeview", background=p["tree"], fieldbackground=p["tree"],
-                             foreground=p["text"], rowheight=30, bordercolor=p["border"],
-                             font=("Segoe UI", 9))
+                             foreground=p["text"], rowheight=row_height, bordercolor=p["border"],
+                             font=(base_font, 9))
+        heading_pad = 5 if self.design in ("classic", "explorer") else 9
         self.style.configure("Treeview.Heading", background=p["surface"], foreground=p["muted"],
-                             font=("Segoe UI", 8, "bold"), padding=8, relief="flat")
+                             font=(base_font, 8, "bold"), padding=heading_pad, relief="flat")
         self.style.map("Treeview", background=[("selected", p["selected"])],
                        foreground=[("selected", p["text"])])
+        primary_pad = (10, 6) if self.design in ("classic", "explorer") else (15, 10)
         self.style.configure("Primary.TButton", background=p["accent"], foreground="#FFFFFF",
-                             padding=(14, 9), borderwidth=0, font=("Segoe UI", 9, "bold"))
+                             padding=primary_pad, borderwidth=0, font=(base_font, 9, "bold"))
         self.style.map("Primary.TButton", background=[("active", p["accent_hover"]), ("disabled", p["border"])])
         self.style.configure("Secondary.TButton", background=p["surface"], foreground=p["text"],
                              padding=(10, 8), borderwidth=1, bordercolor=p["border"])
