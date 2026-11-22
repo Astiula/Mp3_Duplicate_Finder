@@ -649,7 +649,13 @@ class App:
 
     def _scan_worker(self, folder, ffmpeg, fpcalc, threshold):
         try:
-            files = sorted(p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() == ".mp3")
+            files = []
+            for candidate in folder.rglob("*"):
+                if self.cancel_event.is_set():
+                    break
+                if candidate.is_file() and candidate.suffix.lower() == ".mp3":
+                    files.append(candidate)
+            files.sort(key=lambda p: str(p).casefold())
             self.events.put(("progress_init", len(files)))
             self.events.put(("status", f"Znaleziono {len(files)} plików MP3. Obliczanie odcisków audio…"))
             items = []
