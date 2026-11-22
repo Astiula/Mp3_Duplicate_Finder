@@ -325,8 +325,7 @@ class App:
         titlebar = ttk.Frame(self.root, style="App.TFrame", padding=(14, 8, 14, 6))
         titlebar.grid(row=0, column=0, sticky="ew")
         titlebar.grid_columnconfigure(0, weight=1)
-        design_titles = {"fluent": "FLUENT DESIGN", "classic": "CLASSIC", "dark_pro": "DARK PRO", "dashboard": "DASHBOARD", "explorer": "EXPLORER", "glassy_modern": "GLASSY MODERN"}
-        ttk.Label(titlebar, text="MP3 DUPLICATE FINDER  ·  " + design_titles.get(UI_DESIGN, "FLUENT DESIGN"),
+        ttk.Label(titlebar, text="MP3 DUPLICATE FINDER",
                   style="RibbonTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(titlebar, text=f"v{APP_VERSION}", style="RibbonVersion.TLabel").grid(row=0, column=1, padx=(8, 16))
         self.theme_btn = ttk.Button(titlebar, text="🌙  " + tr("Tryb ciemny"),
