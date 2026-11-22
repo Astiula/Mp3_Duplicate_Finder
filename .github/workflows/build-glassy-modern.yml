@@ -1,0 +1,95 @@
+name: Build Glassy Modern EXE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "source/**"
+      - ".github/workflows/build-glassy-modern.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip pyinstaller mutagen
+
+      - name: Verify Python source
+        run: python -m py_compile source/mp3_duplikaty.py
+
+      - name: Download and verify Chromaprint
+        shell: pwsh
+        run: |
+          $url = "https://github.com/acoustid/chromaprint/releases/download/v1.6.1/chromaprint-fpcalc-1.6.1-windows-x86_64.zip"
+          Invoke-WebRequest -Uri $url -OutFile fpcalc.zip
+          $hash = (Get-FileHash fpcalc.zip -Algorithm SHA256).Hash.ToLower()
+          if ($hash -ne "735d6182b38e9f364b84ce6f4ccd682c75e2851de89735711d6b762d12b92a4e") { throw "Chromaprint checksum mismatch" }
+          Expand-Archive fpcalc.zip -DestinationPath fpcalc
+          $fp = Get-ChildItem fpcalc -Filter fpcalc.exe -Recurse | Select-Object -First 1
+          if (!$fp) { throw "fpcalc.exe not found" }
+          Copy-Item $fp.FullName "fpcalc.exe"
+
+      - name: Download and verify FFmpeg
+        shell: pwsh
+        run: |
+          $url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+          Invoke-WebRequest -Uri $url -OutFile ffmpeg.zip
+          Invoke-WebRequest -Uri "$url.sha256" -OutFile ffmpeg.sha256
+          $expected = ((Get-Content ffmpeg.sha256 -Raw).Trim() -split '\\s+')[0].ToLower()
+          $actual = (Get-FileHash ffmpeg.zip -Algorithm SHA256).Hash.ToLower()
+          if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) { throw "FFmpeg checksum mismatch" }
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_extract
+          $ff = Get-ChildItem ffmpeg_extract -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          if (!$ff) { throw "ffmpeg.exe not found" }
+          Copy-Item $ff.FullName "ffmpeg.exe"
+
+      - name: Build standalone EXE
+        shell: pwsh
+        run: |
+          $ffmpegPath = (Resolve-Path "ffmpeg.exe").Path
+          $fpcalcPath = (Resolve-Path "fpcalc.exe").Path
+          @'
+          VSVersionInfo(
+            ffi=FixedFileInfo(filevers=(1, 5, 3, 0), prodvers=(1, 5, 3, 0),
+              mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
+            kids=[
+              StringFileInfo([StringTable('040904B0', [
+                StringStruct('CompanyName', 'Konrad Astachow (Kondar)'),
+                StringStruct('FileDescription', 'MP3 Duplicate Finder — Glassy Modern'),
+                StringStruct('FileVersion', '1.5.3'),
+                StringStruct('InternalName', 'Mp3_Duplicate_Finder'),
+                StringStruct('ProductName', 'MP3 Duplicate Finder'),
+                StringStruct('ProductVersion', '1.5.3'),
+                StringStruct('LegalCopyright', 'Copyright 2026 Konrad Astachow (Kondar)')
+              ])]),
+              VarFileInfo([VarStruct('Translation', [1033, 1200])])
+            ]
+          )
+          '@ | Set-Content -Encoding utf8 version_info.txt
+          $versionPath = (Resolve-Path "version_info.txt").Path
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.3_Glassy_Modern --distpath dist --workpath build --specpath spec --version-file "$versionPath" --add-binary "$ffmpegPath;." --add-binary "$fpcalcPath;." source/mp3_duplikaty.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
+          $exe = "dist/Mp3_Duplicate_Finder_1.5.3_Glassy_Modern.exe"
+          if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Missing or invalid EXE" }
+          Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File "dist/SHA256.txt"
+
+      - name: Upload EXE artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mp3-Duplicate-Finder-1.5.3-Glassy-Modern
+          path: |
+            dist/Mp3_Duplicate_Finder_1.5.3_Glassy_Modern.exe
+            dist/SHA256.txt
+          if-no-files-found: error
