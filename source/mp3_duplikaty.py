@@ -464,6 +464,37 @@ class App:
                              font=("Segoe UI", 11, "bold"))
         self.style.configure("Hint.TLabel", background=p["surface"], foreground=p["muted"], font=("Segoe UI", 8))
         self.style.configure("Status.TLabel", background=p["bg"], foreground=p["muted"], font=("Segoe UI", 9))
+        self.style.configure("RibbonTabs.TFrame", background=p["surface"])
+        self.style.configure("Ribbon.TFrame", background=p["surface"])
+        self.style.configure("RibbonGroup.TFrame", background=p["surface"])
+        self.style.configure("StatusBar.TFrame", background=p["surface"], relief="solid", borderwidth=1)
+        self.style.configure("RibbonTitle.TLabel", background=p["bg"], foreground=p["text"],
+                             font=("Segoe UI", 15, "bold"))
+        self.style.configure("RibbonVersion.TLabel", background=p["bg"], foreground=p["muted"],
+                             font=("Segoe UI", 9))
+        self.style.configure("RibbonTabActive.TLabel", background=p["surface"], foreground=p["accent"],
+                             font=("Segoe UI", 9, "bold"))
+        self.style.configure("RibbonTab.TLabel", background=p["surface"], foreground=p["muted"],
+                             font=("Segoe UI", 9))
+        self.style.configure("RibbonGroupTitle.TLabel", background=p["surface"], foreground=p["muted"],
+                             font=("Segoe UI", 8, "bold"))
+        self.style.configure("RibbonHint.TLabel", background=p["surface"], foreground=p["muted"],
+                             font=("Segoe UI", 8))
+        self.style.configure("RibbonValue.TLabel", background=p["surface"], foreground=p["accent"],
+                             font=("Segoe UI", 9, "bold"))
+        self.style.configure("ResultsTitle.TLabel", background=p["bg"], foreground=p["text"],
+                             font=("Segoe UI", 11, "bold"))
+        self.style.configure("RibbonSmall.TButton", background=p["surface"], foreground=p["text"],
+                             padding=(8, 5), borderwidth=1, bordercolor=p["border"])
+        self.style.map("RibbonSmall.TButton", background=[("active", p["border"])])
+        self.style.configure("RibbonLarge.TButton", background=p["surface"], foreground=p["text"],
+                             padding=(5, 6), borderwidth=1, bordercolor=p["border"],
+                             font=("Segoe UI", 8))
+        self.style.map("RibbonLarge.TButton", background=[("active", p["selected"])])
+        self.style.configure("RibbonLargeDanger.TButton", background=p["surface"], foreground="#DC2626",
+                             padding=(5, 6), borderwidth=1, bordercolor=p["border"],
+                             font=("Segoe UI", 8, "bold"))
+        self.style.map("RibbonLargeDanger.TButton", background=[("active", p["border"])])
         self.style.configure("App.TEntry", fieldbackground=p["tree"], foreground=p["text"],
                              insertcolor=p["text"], bordercolor=p["border"], padding=8)
         self.style.configure("TScale", background=p["surface"], troughcolor=p["border"])
