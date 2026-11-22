@@ -764,8 +764,8 @@ class App:
         if not dest:
             return
         tag_names = {
-            "TIT2": "Tytuł", "TPE1": "Wykonawca", "TALB": "Album",
-            "TRCK": "Numer utworu", "TDRC": "Rok", "TCON": "Gatunek"
+            "TIT2": tr("Tytuł"), "TPE1": tr("Wykonawca"), "TALB": tr("Album"),
+            "TRCK": tr("Numer utworu"), "TDRC": tr("Rok"), "TCON": tr("Gatunek")
         }
         duplicate_types = {}
         for item, kind, score, _lower_quality in self.results:
@@ -775,7 +775,7 @@ class App:
                 duplicate_types[key] = value
         with open(dest, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["Nazwa", "Lokalizacja", "Tagi MP3", "Bitrate (kb/s)", "Duplikat"])
+            writer.writerow([tr("Nazwa"), tr("Lokalizacja"), tr("Tagi MP3"), tr("Bitrate (kb/s)"), tr("Duplikat")])
             for item in sorted(self.scanned_items, key=lambda x: str(x["path"]).casefold()):
                 path = Path(item["path"])
                 tags = item.get("tags", {})
