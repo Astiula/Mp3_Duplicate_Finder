@@ -88,7 +88,7 @@ def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
 APP_VERSION = "1.5.2"
-UI_DESIGN = "fluent"
+UI_DESIGN = "explorer"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
