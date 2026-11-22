@@ -712,17 +712,26 @@ class App:
         if not self.scanned_items:
             messagebox.showinfo(APP_TITLE, "Brak zeskanowanych plików MP3 do eksportu.")
             return
+        scan_folder = Path(self.folder.get()).expanduser()
+        initial_dir = scan_folder if scan_folder.is_dir() else Path.home()
         dest = filedialog.asksaveasfilename(defaultextension=".csv",
-            filetypes=[("CSV", "*.csv")], initialfile="biblioteka_mp3.csv")
+            filetypes=[("CSV", "*.csv")], initialdir=str(initial_dir),
+            initialfile="biblioteka_mp3.csv", title="Zapisz raport CSV")
         if not dest:
             return
         tag_names = {
             "TIT2": "Tytuł", "TPE1": "Wykonawca", "TALB": "Album",
             "TRCK": "Numer utworu", "TDRC": "Rok", "TCON": "Gatunek"
         }
+        duplicate_types = {}
+        for item, kind, score, _lower_quality in self.results:
+            key = str(item["path"])
+            value = "TAK — identyczny" if kind.startswith("Identyczna zawartość audio") else "TAK — podobny"
+            if duplicate_types.get(key) != "TAK — identyczny":
+                duplicate_types[key] = value
         with open(dest, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["Nazwa", "Lokalizacja", "Tagi MP3", "Bitrate (kb/s)"])
+            writer.writerow(["Nazwa", "Lokalizacja", "Tagi MP3", "Bitrate (kb/s)", "Duplikat"])
             for item in sorted(self.scanned_items, key=lambda x: str(x["path"]).casefold()):
                 path = Path(item["path"])
                 tags = item.get("tags", {})
@@ -730,8 +739,9 @@ class App:
                     f"{tag_names[key]}: {tags[key]}" for key in tag_names if tags.get(key)
                 )
                 bitrate = item.get("quality", {}).get("bitrate", 0)
+                duplicate_label = duplicate_types.get(str(path), "Nie")
                 writer.writerow([path.name, str(path.parent), tag_text,
-                    f"{bitrate / 1000:.0f}" if bitrate else ""])
+                    f"{bitrate / 1000:.0f}" if bitrate else "", duplicate_label])
         messagebox.showinfo(APP_TITLE,
             f"Zapisano raport CSV. Liczba plików: {len(self.scanned_items)}.")
 
