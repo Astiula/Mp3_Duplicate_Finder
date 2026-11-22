@@ -87,7 +87,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.4"
+APP_VERSION = "1.5.5"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -1042,11 +1042,8 @@ class App:
                              "_duration", "_fingerprint", "_bitrate", "_sample_rate", "_tags_json"])
             for item in sorted(self.scanned_items, key=lambda x: str(x["path"]).casefold()):
                 path = Path(item["path"])
-                try:
-                    stat = path.stat()
-                    size, mtime_ns = stat.st_size, stat.st_mtime_ns
-                except OSError:
-                    size, mtime_ns = item.get("size", 0), item.get("mtime_ns", 0)
+                size = item.get("size", 0)
+                mtime_ns = item.get("mtime_ns", 0)
                 tags = item.get("tags", {})
                 tag_text = " | ".join(
                     f"{tag_names[key]}: {tags[key]}" for key in tag_names if tags.get(key)
