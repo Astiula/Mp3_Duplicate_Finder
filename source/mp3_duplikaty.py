@@ -87,8 +87,8 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.2"
-UI_DESIGN = "fluent"
+APP_VERSION = "1.5.3"
+UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
@@ -325,11 +325,11 @@ class App:
         titlebar = ttk.Frame(self.root, style="App.TFrame", padding=(14, 8, 14, 6))
         titlebar.grid(row=0, column=0, sticky="ew")
         titlebar.grid_columnconfigure(0, weight=1)
-        design_titles = {"fluent": "FLUENT DESIGN", "classic": "CLASSIC", "dark_pro": "DARK PRO", "dashboard": "DASHBOARD", "explorer": "EXPLORER"}
+        design_titles = {"fluent": "FLUENT DESIGN", "classic": "CLASSIC", "dark_pro": "DARK PRO", "dashboard": "DASHBOARD", "explorer": "EXPLORER", "glassy_modern": "GLASSY MODERN"}
         ttk.Label(titlebar, text="MP3 DUPLICATE FINDER  ·  " + design_titles.get(UI_DESIGN, "FLUENT DESIGN"),
                   style="RibbonTitle.TLabel").grid(row=0, column=0, sticky="w")
         ttk.Label(titlebar, text=f"v{APP_VERSION}", style="RibbonVersion.TLabel").grid(row=0, column=1, padx=(8, 16))
-        self.theme_btn = ttk.Button(titlebar, text="☾  " + tr("Tryb ciemny"),
+        self.theme_btn = ttk.Button(titlebar, text="🌙  " + tr("Tryb ciemny"),
                                     command=self.toggle_theme, style="RibbonSmall.TButton")
         self.theme_btn.grid(row=0, column=2, padx=(0, 6))
         ttk.Button(titlebar, text=tr("O programie"), command=self.show_about,
@@ -386,7 +386,7 @@ class App:
         export = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         export.grid(row=0, column=2, sticky="nsew", padx=7)
         ttk.Label(export, text=tr("Raport"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
-        ttk.Button(export, text="⇩  " + tr("Eksportuj CSV"), command=self.export_csv,
+        ttk.Button(export, text="📄  " + tr("Eksportuj CSV"), command=self.export_csv,
                    style="RibbonSmall.TButton").pack(fill="x", expand=True, pady=(10, 0))
 
         # Group 4 — preview and navigation.
@@ -395,20 +395,20 @@ class App:
         ttk.Label(audio, text=tr("Odsłuch i pliki"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
         audio_row = ttk.Frame(audio, style="RibbonGroup.TFrame")
         audio_row.pack(fill="x", expand=True, pady=(4, 0))
-        self.play_btn = ttk.Button(audio_row, text="▶  " + tr("Odsłuch 15 s"), command=self.play_selected,
+        self.play_btn = ttk.Button(audio_row, text="🎵  " + tr("Odsłuch 15 s"), command=self.play_selected,
                                    style="RibbonSmall.TButton")
         self.play_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
-        self.stop_play_btn = ttk.Button(audio_row, text="■  " + tr("Stop audio"), command=self.stop_playback,
+        self.stop_play_btn = ttk.Button(audio_row, text="⏹  " + tr("Stop audio"), command=self.stop_playback,
                                         style="RibbonSmall.TButton", state="disabled")
         self.stop_play_btn.pack(side="left", fill="x", expand=True, padx=3)
-        ttk.Button(audio_row, text="↗  " + tr("Otwórz folder"), command=self.open_location,
+        ttk.Button(audio_row, text="📂  " + tr("Otwórz folder"), command=self.open_location,
                    style="RibbonSmall.TButton").pack(side="left", fill="x", expand=True, padx=(3, 0))
 
         # Group 5 — file management.
         manage = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         manage.grid(row=0, column=4, sticky="nsew", padx=(7, 0))
         ttk.Label(manage, text=tr("Zarządzanie"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
-        ttk.Button(manage, text="⇢  " + tr("Przenieś do Duplikaty"),
+        ttk.Button(manage, text="✨  " + tr("Przenieś do Duplikaty"),
                    command=self.move_selected, style="RibbonSmall.TButton").pack(
                        fill="x", expand=True, pady=(10, 0))
 
@@ -483,7 +483,8 @@ class App:
             "classic": {"bg": "#E9EDF2", "surface": "#F8FAFC", "text": "#1F2937", "muted": "#526273", "accent": "#075985", "accent_hover": "#0C4A6E", "border": "#B8C4D1", "tree": "#FFFFFF", "selected": "#D7E7F5"},
             "dark_pro": {"muted": "#91A4BC", "accent": "#0891B2", "accent_hover": "#0E7490", "border": "#26364D"},
             "dashboard": {"bg": "#F4F2FA", "surface": "#FFFFFF", "text": "#24213A", "muted": "#716B87", "accent": "#6D4AFF", "accent_hover": "#5636D9", "border": "#E1DDF0", "tree": "#FFFFFF", "selected": "#E9E3FF"},
-            "explorer": {"bg": "#F1F4F6", "surface": "#FFFFFF", "text": "#202B36", "muted": "#657482", "accent": "#0F766E", "accent_hover": "#115E59", "border": "#D5DDE3", "tree": "#FFFFFF", "selected": "#D9F0EC"}
+            "explorer": {"bg": "#F1F4F6", "surface": "#FFFFFF", "text": "#202B36", "muted": "#657482", "accent": "#0F766E", "accent_hover": "#115E59", "border": "#D5DDE3", "tree": "#FFFFFF", "selected": "#D9F0EC"},
+            "glassy_modern": ({"bg": "#EAF4FC", "surface": "#F8FCFF", "text": "#17324D", "muted": "#5D7892", "accent": "#168BDB", "accent_hover": "#0874BD", "border": "#C5DCEF", "tree": "#FFFFFF", "selected": "#D8EEFF", "success": "#0EAD83"} if self.theme_name == "light" else {"bg": "#101F32", "surface": "#1B3048", "text": "#EAF5FF", "muted": "#A5C0D8", "accent": "#45B8F5", "accent_hover": "#2196D2", "border": "#34516D", "tree": "#14263A", "selected": "#244D6D", "success": "#48D6B0"})
         }
         p.update(design_colors.get(self.design, {}))
         self.root.configure(bg=p["bg"])
@@ -503,8 +504,8 @@ class App:
         self.style.configure("Hint.TLabel", background=p["surface"], foreground=p["muted"], font=("Segoe UI", 8))
         self.style.configure("Status.TLabel", background=p["bg"], foreground=p["muted"], font=("Segoe UI", 9))
         self.style.configure("RibbonTabs.TFrame", background=p["surface"])
-        self.style.configure("Ribbon.TFrame", background=p["surface"])
-        self.style.configure("RibbonGroup.TFrame", background=p["bg"])
+        self.style.configure("Ribbon.TFrame", background=p["surface"], relief="solid" if self.design == "glassy_modern" else "flat", borderwidth=1 if self.design == "glassy_modern" else 0)
+        self.style.configure("RibbonGroup.TFrame", background=p["surface"] if self.design == "glassy_modern" else p["bg"])
         self.style.configure("ResultsCount.TLabel", background=p["bg"], foreground=p["muted"],
                              font=("Segoe UI", 9))
         self.style.configure("StatusBar.TFrame", background=p["surface"], relief="solid", borderwidth=1)
@@ -524,7 +525,7 @@ class App:
                              font=("Segoe UI", 9, "bold"))
         self.style.configure("ResultsTitle.TLabel", background=p["bg"], foreground=p["text"],
                              font=("Segoe UI", 11, "bold"))
-        button_pad = (5, 4) if self.design in ("classic", "explorer") else (9, 7)
+        button_pad = (5, 4) if self.design in ("classic", "explorer") else ((12, 9) if self.design == "glassy_modern" else (9, 7))
         self.style.configure("RibbonSmall.TButton", background=p["surface"], foreground=p["text"],
                              padding=button_pad, borderwidth=1, bordercolor=p["border"],
                              font=(base_font, 9))
@@ -560,7 +561,7 @@ class App:
         self.style.configure("Danger.TButton", background=p["surface"], foreground="#DC2626",
                              padding=(10, 8), borderwidth=1, bordercolor=p["border"])
         self.style.map("Danger.TButton", background=[("active", p["border"])])
-        self.theme_btn.configure(text=("☀  " + tr("Tryb jasny")) if self.theme_name == "dark" else ("☾  " + tr("Tryb ciemny")))
+        self.theme_btn.configure(text=("☀️  " + tr("Tryb jasny")) if self.theme_name == "dark" else ("🌙  " + tr("Tryb ciemny")))
 
     def toggle_theme(self):
         self.theme_name = "dark" if self.theme_name == "light" else "light"
