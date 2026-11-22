@@ -54,6 +54,7 @@ TRANSLATIONS = {
     "Otwórz lokalizację": "Open file location", "▶  Odsłuchaj 15 s": "▶  Play 15 sec",
     "■  Stop audio": "■  Stop audio",
     "Przenieś zaznaczone do „Duplikaty”": "Move selected to “Duplicates”",
+    "Zaznacz sugerowane duplikaty": "Select suggested duplicates",
     "Zapisz raport CSV": "Save CSV report",
     "Najpierw wybierz prawidłowy folder.": "Please choose a valid folder first.",
     "Brak zeskanowanych plików MP3 do eksportu.": "There are no scanned MP3 files to export.",
@@ -87,7 +88,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.5"
+APP_VERSION = "1.5.6"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -410,9 +411,13 @@ class App:
         manage = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         manage.grid(row=0, column=4, sticky="nsew", padx=(7, 0))
         ttk.Label(manage, text=tr("Zarządzanie"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        ttk.Button(manage, text="☑  " + tr("Zaznacz sugerowane duplikaty"),
+                   command=self.select_suggested_duplicates,
+                   style="Folder.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(
+                       fill="x", expand=True, pady=(5, 2))
         ttk.Button(manage, text="✨  " + tr("Przenieś do Duplikaty"),
                    command=self.move_selected, style="Manage.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(
-                       fill="x", expand=True, pady=(10, 0))
+                       fill="x", expand=True, pady=(2, 0))
 
         # Short explanatory line under the ribbon.
         hint = ttk.Frame(self.root, style="App.TFrame", padding=(14, 2, 14, 7))
@@ -801,6 +806,21 @@ class App:
             except Exception:
                 pass
         self.root.after(100, self._poll)
+
+    def select_suggested_duplicates(self):
+        """Select every duplicate suggestion currently displayed in the results table."""
+        items = self.tree.get_children("")
+        if not items:
+            self.tree.selection_remove(self.tree.selection())
+            self.status.set("Brak sugerowanych duplikatów do zaznaczenia.")
+            return
+        self.tree.selection_set(items)
+        self.tree.focus(items[0])
+        self.tree.see(items[0])
+        selected_files = len({self.tree.item(i, "values")[4] for i in items})
+        self.count_label.configure(
+            text=f"Zaznaczono {len(items)} wyników · {selected_files} plików z duplikatami")
+        self.status.set(f"Zaznaczono wszystkie sugerowane duplikaty: {selected_files} plików.")
 
     def selected_paths(self):
         return list(dict.fromkeys(Path(self.tree.item(i, "values")[4]) for i in self.tree.selection()))
