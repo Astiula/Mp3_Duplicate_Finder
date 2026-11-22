@@ -88,7 +88,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.6"
+APP_VERSION = "1.5.7"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -334,7 +334,9 @@ class App:
                                     command=self.toggle_theme, style="RibbonSmall.TButton")
         self.theme_btn.grid(row=0, column=2, padx=(0, 6))
         ttk.Button(titlebar, text=tr("O programie"), command=self.show_about,
-                   style="RibbonSmall.TButton").grid(row=0, column=3)
+                   style="RibbonSmall.TButton").grid(row=0, column=3, padx=(0, 6))
+        ttk.Button(titlebar, text="❔  Pomoc", command=self.show_help,
+                   style="RibbonSmall.TButton").grid(row=0, column=4)
 
         tabs = ttk.Frame(self.root, style="RibbonTabs.TFrame", padding=(14, 0, 14, 0))
         tabs.grid(row=1, column=0, sticky="ew")
@@ -581,6 +583,94 @@ class App:
         self.theme_name = "dark" if self.theme_name == "light" else "light"
         self.save_theme()
         self.apply_theme()
+
+    def show_help(self):
+        """Display practical instructions for using MP3 Duplicate Finder."""
+        win = tk.Toplevel(self.root)
+        win.title("Pomoc — MP3 Duplicate Finder")
+        win.transient(self.root)
+        win.geometry("760x680")
+        win.minsize(600, 480)
+        p = self.PALETTES[self.theme_name]
+        win.configure(bg=p["bg"])
+
+        frame = ttk.Frame(win, padding=18, style="App.TFrame")
+        frame.pack(fill="both", expand=True)
+        ttk.Label(frame, text="Pomoc — jak korzystać z programu",
+                  style="Title.TLabel").pack(anchor="w")
+        ttk.Label(frame, text="Instrukcja obsługi MP3 Duplicate Finder",
+                  style="Subtitle.TLabel").pack(anchor="w", pady=(3, 12))
+
+        content = tk.Frame(frame, bg=p["surface"], highlightthickness=1,
+                           highlightbackground=p["border"])
+        content.pack(fill="both", expand=True)
+        scrollbar = ttk.Scrollbar(content, orient="vertical")
+        help_text = tk.Text(content, wrap="word", yscrollcommand=scrollbar.set,
+                            relief="flat", padx=14, pady=12, spacing1=2,
+                            spacing3=5, bg=p["tree"], fg=p["text"],
+                            insertbackground=p["text"], selectbackground=p["selected"],
+                            font=("Segoe UI", 10), borderwidth=0,
+                            highlightthickness=0)
+        scrollbar.configure(command=help_text.yview)
+        scrollbar.pack(side="right", fill="y")
+        help_text.pack(side="left", fill="both", expand=True)
+
+        help_text.tag_configure("heading", font=("Segoe UI", 11, "bold"),
+                                 foreground=p["accent"], spacing1=9, spacing3=3)
+        help_text.tag_configure("body", foreground=p["text"])
+        sections = [
+            ("1. Rozpoczęcie pracy",
+             "W polu „Folder do przeskanowania” wskaż folder zawierający muzykę MP3. "
+             "Program przeszukuje również podfoldery. Następnie kliknij „Skanuj”. "
+             "Wbudowane w wydanie programu narzędzia FFmpeg i fpcalc analizują dźwięk. "
+             "Nie zmieniaj ani nie przenoś plików podczas skanowania."),
+            ("2. Próg podobieństwa",
+             "Suwak określa minimalny poziom podobieństwa odcisków audio. Domyślna wartość "
+             "to 82%, a dostępny zakres wynosi 65–98%. Niższy próg może wykryć więcej "
+             "zmienionych wersji nagrania, ale zwiększa ryzyko nietrafionych dopasowań. "
+             "Wyższy próg jest bardziej rygorystyczny i może pominąć część podobnych wersji. "
+             "Wynik procentowy jest miarą podobieństwa odcisków, a nie gwarancją identyczności."),
+            ("3. Odczytywanie wyników",
+             "Tabela pokazuje rodzaj dopasowania, zgodność, orientacyjną jakość MP3, "
+             "rozmiar oraz lokalizację pliku. Program rozpoznaje identyczną zawartość audio "
+             "i podobne nagrania. Ocena jakości jest heurystyczna — uwzględnia m.in. bitrate, "
+             "częstotliwość próbkowania i rozmiar; nie jest oceną odsłuchową. "
+             "Czerwone oznaczenie wskazuje plik o niższej jakości w danej parze."),
+            ("4. Zaznaczanie sugerowanych duplikatów",
+             "Po zakończeniu analizy program automatycznie zaznacza znalezione pozycje. "
+             "Przycisk „Zaznacz sugerowane duplikaty” zaznacza wszystkie pozycje znajdujące "
+             "się aktualnie w tabeli wyników — zarówno identyczne, jak i podobne. "
+             "Możesz też zaznaczać i odznaczać pozycje ręcznie, używając Ctrl lub Shift."),
+            ("5. Odsłuch i lokalizacja",
+             "Zaznacz jeden lub więcej wierszy, a następnie użyj „Odsłuch 15 s”, aby "
+             "odtworzyć maksymalnie 15 sekund pierwszego zaznaczonego pliku. „Stop audio” "
+             "przerywa odsłuch. „Otwórz folder” otwiera lokalizację pierwszego zaznaczonego pliku. "
+             "Dwukrotne kliknięcie wiersza również otwiera jego folder."),
+            ("6. Przenoszenie plików",
+             "Przycisk „Przenieś do Duplikaty” przenosi zaznaczone pliki do podfolderu "
+             "„Duplikaty” w ich bieżących lokalizacjach. Przed operacją program prosi o "
+             "potwierdzenie. Jeśli nazwa pliku już istnieje, dodaje numer do nazwy. "
+             "Operacja przenosi pliki — nie usuwa ich. Przed przenoszeniem sprawdź "
+             "zaznaczenie i upewnij się, że masz kopię zapasową ważnych nagrań."),
+            ("7. Raport CSV i ponowne użycie skanu",
+             "„Eksportuj CSV” zapisuje raport całej przeskanowanej biblioteki, nie tylko "
+             "duplikatów. Raport zawiera nazwy, lokalizacje, odczytane tagi MP3, bitrate, "
+             "status duplikatu oraz techniczne dane odcisków audio. „Wczytaj CSV” odtwarza "
+             "zapisane wyniki i bazę. Przy kolejnym skanowaniu program może pominąć ponowną "
+             "analizę audio plików, których ścieżka, rozmiar i czas modyfikacji nie uległy zmianie. "
+             "Pliki nowe lub zmienione są analizowane ponownie. Starsze raporty bez danych "
+             "odcisków służą do odtworzenia informacji, ale nie przyspieszają analizy."),
+            ("8. Zatrzymywanie i ustawienia",
+             "„Stop” zatrzymuje bieżące skanowanie i pozostawia dotychczas zebrane wyniki. "
+             "Program zapamiętuje ostatnio używany folder oraz wybrany motyw jasny lub ciemny. "
+             "Pasek stanu pokazuje postęp i liczbę znalezionych oraz przeskanowanych plików."),
+        ]
+        for heading, body in sections:
+            help_text.insert("end", heading + "\\n", "heading")
+            help_text.insert("end", body + "\\n", "body")
+        help_text.configure(state="disabled")
+        ttk.Button(frame, text="Zamknij", command=win.destroy,
+                   style="Primary.TButton").pack(anchor="e", pady=(12, 0))
 
     def show_about(self):
         win = tk.Toplevel(self.root)
