@@ -37,6 +37,12 @@ def windows_language():
 
 LANGUAGE = "pl" if windows_language() == "pl" else "en"
 TRANSLATIONS = {
+    "Narzędzia główne": "Home", "Analiza biblioteki": "Library analysis",
+    "Biblioteka muzyczna": "Music library", "Folder do przeskanowania": "Folder to scan",
+    "Skanowanie": "Scan", "Skanuj": "Scan", "Stop": "Stop", "Raport": "Report",
+    "Odsłuch i pliki": "Preview & files", "Odsłuch 15 s": "Preview 15 sec",
+    "Otwórz folder": "Open folder", "Zarządzanie": "Manage",
+    "Przenieś do Duplikaty": "Move to Duplicates", "Wyniki analizy": "Analysis results",
     "Wyszukiwanie identycznych i podobnych nagrań na podstawie odcisku audio": "Find identical and similar audio tracks using audio fingerprints",
     "O programie": "About", "Tryb ciemny": "Dark mode", "Tryb jasny": "Light mode",
     "FOLDER Z MUZYKĄ": "MUSIC FOLDER", "Wybierz folder…": "Choose folder…",
@@ -81,7 +87,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
@@ -259,7 +265,7 @@ class App:
         self.root.title(APP_TITLE)
         self.root.geometry("1240x800")
         # Minimalny rozmiar chroni stałe sekcje sterujące przed obcięciem.
-        self.root.minsize(900, 620)
+        self.root.minsize(980, 650)
         self.events = queue.Queue()
         self.results = []
         self.scanned_items = []
@@ -306,102 +312,140 @@ class App:
         self.style = ttk.Style()
         self.style.theme_use("clam")
 
-        self.root.grid_rowconfigure(0, weight=1)
+        # Office-inspired ribbon: fixed command area, expandable results table.
+        self.root.grid_rowconfigure(0, weight=0)
+        self.root.grid_rowconfigure(1, weight=0)
+        self.root.grid_rowconfigure(2, weight=0)
+        self.root.grid_rowconfigure(3, weight=1)
+        self.root.grid_rowconfigure(4, weight=0)
         self.root.grid_columnconfigure(0, weight=1)
-        self.main = ttk.Frame(self.root, padding=14, style="App.TFrame")
-        self.main.grid(row=0, column=0, sticky="nsew")
-        self.main.grid_columnconfigure(0, weight=1)
-        self.main.grid_rowconfigure(0, minsize=68, weight=0)
-        self.main.grid_rowconfigure(1, minsize=88, weight=0)
-        self.main.grid_rowconfigure(2, minsize=112, weight=0)
-        self.main.grid_rowconfigure(3, minsize=180, weight=1)
-        self.main.grid_rowconfigure(4, minsize=42, weight=0)
-        self.main.grid_rowconfigure(5, minsize=30, weight=0)
 
-        header = ttk.Frame(self.main, style="App.TFrame")
-        header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
-        titlebox = ttk.Frame(header, style="App.TFrame")
-        titlebox.pack(side="left", fill="x", expand=True)
-        ttk.Label(titlebox, text="MP3 DUPLICATE FINDER", style="Title.TLabel").pack(anchor="w")
-        ttk.Label(titlebox, text=tr("Wyszukiwanie identycznych i podobnych nagrań na podstawie odcisku audio"),
-                  style="Subtitle.TLabel").pack(anchor="w", pady=(4, 0))
-        self.theme_btn = ttk.Button(header, text="☾  " + tr("Tryb ciemny"), command=self.toggle_theme, style="Secondary.TButton")
-        self.theme_btn.pack(side="right", padx=(8, 0))
-        ttk.Button(header, text=tr("O programie"), command=self.show_about, style="Secondary.TButton").pack(side="right")
+        titlebar = ttk.Frame(self.root, style="App.TFrame", padding=(14, 8, 14, 6))
+        titlebar.grid(row=0, column=0, sticky="ew")
+        titlebar.grid_columnconfigure(0, weight=1)
+        ttk.Label(titlebar, text="MP3 DUPLICATE FINDER", style="RibbonTitle.TLabel").grid(row=0, column=0, sticky="w")
+        ttk.Label(titlebar, text=f"v{APP_VERSION}", style="RibbonVersion.TLabel").grid(row=0, column=1, padx=(8, 16))
+        self.theme_btn = ttk.Button(titlebar, text="☾  " + tr("Tryb ciemny"),
+                                    command=self.toggle_theme, style="RibbonSmall.TButton")
+        self.theme_btn.grid(row=0, column=2, padx=(0, 6))
+        ttk.Button(titlebar, text=tr("O programie"), command=self.show_about,
+                   style="RibbonSmall.TButton").grid(row=0, column=3)
 
-        folder_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
-        folder_card.grid(row=1, column=0, sticky="ew", pady=(0, 10))
-        ttk.Label(folder_card, text=tr("FOLDER Z MUZYKĄ"), style="Section.TLabel").pack(anchor="w", pady=(0, 8))
-        folder_row = ttk.Frame(folder_card, style="Card.TFrame")
+        tabs = ttk.Frame(self.root, style="RibbonTabs.TFrame", padding=(12, 0))
+        tabs.grid(row=1, column=0, sticky="ew")
+        ttk.Label(tabs, text=tr("Narzędzia główne"), style="RibbonTabActive.TLabel",
+                  padding=(12, 7)).pack(side="left")
+        ttk.Label(tabs, text=tr("Analiza biblioteki"), style="RibbonTab.TLabel",
+                  padding=(12, 7)).pack(side="left")
+
+        ribbon = ttk.Frame(self.root, style="Ribbon.TFrame", padding=(10, 9, 10, 7))
+        ribbon.grid(row=2, column=0, sticky="ew")
+        ribbon.grid_columnconfigure(0, weight=3)
+        ribbon.grid_columnconfigure(1, weight=2)
+        ribbon.grid_columnconfigure(2, weight=1)
+        ribbon.grid_columnconfigure(3, weight=2)
+        ribbon.grid_columnconfigure(4, weight=2)
+
+        # Group 1 — music library.
+        library = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
+        library.grid(row=0, column=0, sticky="nsew", padx=(0, 7))
+        ttk.Label(library, text=tr("Biblioteka muzyczna"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        ttk.Label(library, text=tr("Folder do przeskanowania"), style="RibbonHint.TLabel").pack(anchor="w", pady=(3, 2))
+        folder_row = ttk.Frame(library, style="RibbonGroup.TFrame")
         folder_row.pack(fill="x")
-        ttk.Entry(folder_row, textvariable=self.folder, style="App.TEntry", width=62).pack(side="left")
-        ttk.Button(folder_row, text=tr("Wybierz folder…"), command=self.choose, style="Secondary.TButton").pack(side="left", padx=(8, 0))
+        self.folder_entry = ttk.Entry(folder_row, textvariable=self.folder, style="App.TEntry")
+        self.folder_entry.pack(side="left", fill="x", expand=True)
+        ttk.Button(folder_row, text="…", width=3, command=self.choose,
+                   style="RibbonSmall.TButton").pack(side="left", padx=(5, 0))
 
-        settings_card = ttk.Frame(self.main, padding=14, style="Card.TFrame")
-        settings_card.grid(row=2, column=0, sticky="ew", pady=(0, 10))
-        ttk.Label(settings_card, text=tr("USTAWIENIA ANALIZY"), style="Section.TLabel").pack(anchor="w", pady=(0, 8))
-        controls = ttk.Frame(settings_card, style="Card.TFrame")
-        controls.pack(fill="x")
-        ttk.Label(controls, text=tr("Próg podobieństwa:"), style="Body.TLabel").pack(side="left")
-        self.threshold_scale = ttk.Scale(controls, from_=0.65, to=0.98, variable=self.threshold,
-                                         orient="horizontal", length=230)
-        self.threshold_scale.pack(side="left", padx=10)
-        self.th_label = ttk.Label(controls, text="82%", style="Value.TLabel", width=5)
-        self.th_label.pack(side="left")
+        # Group 2 — scan controls.
+        scan = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
+        scan.grid(row=0, column=1, sticky="nsew", padx=7)
+        ttk.Label(scan, text=tr("Skanowanie"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        threshold_row = ttk.Frame(scan, style="RibbonGroup.TFrame")
+        threshold_row.pack(fill="x", pady=(4, 1))
+        ttk.Label(threshold_row, text=tr("Próg podobieństwa:"), style="RibbonHint.TLabel").pack(side="left")
+        self.th_label = ttk.Label(threshold_row, text="82%", style="RibbonValue.TLabel")
+        self.th_label.pack(side="right")
+        self.threshold_scale = ttk.Scale(scan, from_=0.65, to=0.98, variable=self.threshold,
+                                         orient="horizontal")
+        self.threshold_scale.pack(fill="x", pady=(0, 5))
         self.threshold.trace_add("write", lambda *_: self.th_label.config(text=f"{self.threshold.get():.0%}"))
-        self.scan_btn = ttk.Button(controls, text=tr("▶  Rozpocznij skanowanie"), command=self.start_scan, style="Primary.TButton", width=24)
-        self.scan_btn.pack(side="right")
-        self.stop_btn = ttk.Button(controls, text=tr("■  Zatrzymaj"), command=self.stop_scan, style="Danger.TButton", width=13, state="disabled")
-        self.stop_btn.pack(side="right", padx=(0, 8))
-        ttk.Button(controls, text=tr("Eksportuj CSV"), command=self.export_csv, style="Secondary.TButton").pack(side="right", padx=(0, 8))
-        ttk.Label(settings_card, text="Niższy próg wykrywa więcej podobieństw, ale może zwiększyć liczbę fałszywych trafień.",
-                  style="Hint.TLabel").pack(anchor="w", pady=(8, 0))
+        scan_buttons = ttk.Frame(scan, style="RibbonGroup.TFrame")
+        scan_buttons.pack(fill="x")
+        self.scan_btn = ttk.Button(scan_buttons, text=tr("▶  Skanuj"), command=self.start_scan,
+                                   style="Primary.TButton")
+        self.scan_btn.pack(side="left", fill="x", expand=True)
+        self.stop_btn = ttk.Button(scan_buttons, text=tr("■  Stop"), command=self.stop_scan,
+                                   style="Danger.TButton", state="disabled")
+        self.stop_btn.pack(side="left", padx=(5, 0))
 
-        results_card = ttk.Frame(self.main, padding=12, style="Card.TFrame")
-        results_card.grid(row=3, column=0, sticky="nsew")
-        result_header = ttk.Frame(results_card, style="Card.TFrame")
-        result_header.pack(fill="x", pady=(0, 8))
-        ttk.Label(result_header, text=tr("WYNIKI ANALIZY"), style="Section.TLabel").pack(side="left")
-        self.count_label = ttk.Label(result_header, text="0 wyników", style="Hint.TLabel")
-        self.count_label.pack(side="right")
+        # Group 3 — export.
+        export = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
+        export.grid(row=0, column=2, sticky="nsew", padx=7)
+        ttk.Label(export, text=tr("Raport"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        ttk.Button(export, text="▤\n" + tr("Eksportuj CSV"), command=self.export_csv,
+                   style="RibbonLarge.TButton").pack(fill="both", expand=True, pady=(4, 0))
 
-        table_wrap = ttk.Frame(results_card, style="Card.TFrame")
-        table_wrap.pack(fill="both", expand=True)
+        # Group 4 — preview and navigation.
+        audio = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
+        audio.grid(row=0, column=3, sticky="nsew", padx=7)
+        ttk.Label(audio, text=tr("Odsłuch i pliki"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        audio_row = ttk.Frame(audio, style="RibbonGroup.TFrame")
+        audio_row.pack(fill="x", expand=True, pady=(4, 0))
+        ttk.Button(audio_row, text="▶\n" + tr("Odsłuch 15 s"), command=self.play_selected,
+                   style="RibbonLarge.TButton").pack(side="left", fill="both", expand=True, padx=(0, 3))
+        ttk.Button(audio_row, text="■\n" + tr("Stop audio"), command=self.stop_playback,
+                   style="RibbonLarge.TButton").pack(side="left", fill="both", expand=True, padx=3)
+        ttk.Button(audio_row, text="⌕\n" + tr("Otwórz folder"), command=self.open_location,
+                   style="RibbonLarge.TButton").pack(side="left", fill="both", expand=True, padx=(3, 0))
+
+        # Group 5 — file management.
+        manage = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
+        manage.grid(row=0, column=4, sticky="nsew", padx=(7, 0))
+        ttk.Label(manage, text=tr("Zarządzanie"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
+        ttk.Button(manage, text="⇢\n" + tr("Przenieś do Duplikaty"),
+                   command=self.move_selected, style="RibbonLargeDanger.TButton").pack(
+                       fill="both", expand=True, pady=(4, 0))
+
+        # Short explanatory line under the ribbon.
+        hint = ttk.Frame(self.root, style="App.TFrame", padding=(14, 2, 14, 7))
+        hint.grid(row=3, column=0, sticky="nsew")
+        hint.grid_rowconfigure(1, weight=1)
+        hint.grid_columnconfigure(0, weight=1)
+        ttk.Label(hint, text=tr("Wyniki analizy"), style="ResultsTitle.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 5))
+
+        table_wrap = ttk.Frame(hint, style="Card.TFrame", padding=7)
+        table_wrap.grid(row=1, column=0, sticky="nsew")
+        table_wrap.grid_rowconfigure(0, weight=1)
+        table_wrap.grid_columnconfigure(0, weight=1)
         cols = ("kind", "similarity", "quality", "size", "path")
         self.tree = ttk.Treeview(table_wrap, columns=cols, show="headings", selectmode="extended")
-        for c, title, width in [("kind", "RODZAJ DOPASOWANIA", 280), ("similarity", "ZGODNOŚĆ", 100),
-                                ("quality", "JAKOŚĆ MP3", 125), ("size", "ROZMIAR", 100),
+        for c, title, width in [("kind", "RODZAJ DOPASOWANIA", 260), ("similarity", "ZGODNOŚĆ", 95),
+                                ("quality", "JAKOŚĆ MP3", 115), ("size", "ROZMIAR", 90),
                                 ("path", "LOKALIZACJA PLIKU", 500)]:
-            self.tree.heading(c, text=title)
-            self.tree.column(c, width=width, minwidth=70 if c == "path" else width, stretch=(c == "path"), anchor="w")
+            self.tree.heading(c, text=tr(title))
+            self.tree.column(c, width=width, minwidth=70 if c == "path" else width,
+                             stretch=(c == "path"), anchor="w")
         yscroll = ttk.Scrollbar(table_wrap, orient="vertical", command=self.tree.yview)
-        xscroll = ttk.Scrollbar(results_card, orient="horizontal", command=self.tree.xview)
+        xscroll = ttk.Scrollbar(hint, orient="horizontal", command=self.tree.xview)
         self.tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
-        self.tree.pack(side="left", fill="both", expand=True)
-        # Paski przewijania są stale widoczne.
-        yscroll.pack(side="right", fill="y")
-        xscroll.pack(fill="x")
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=2, column=0, sticky="ew", padx=(7, 0))
         self.tree.tag_configure("lower_quality", foreground="#DC2626")
         self.tree.bind("<Double-1>", lambda e: self.open_location())
 
-        footer = ttk.Frame(self.main, style="App.TFrame")
-        footer.grid(row=4, column=0, sticky="ew", pady=(10, 0))
-        ttk.Button(footer, text=tr("Otwórz lokalizację"), command=self.open_location, style="Secondary.TButton").pack(side="left")
-        self.play_btn = ttk.Button(footer, text=tr("▶  Odsłuchaj 15 s"), command=self.play_selected, style="Secondary.TButton")
-        self.play_btn.pack(side="left", padx=(8, 0))
-        self.stop_play_btn = ttk.Button(footer, text=tr("■  Stop audio"), command=self.stop_playback, style="Secondary.TButton", state="disabled")
-        self.stop_play_btn.pack(side="left", padx=8)
-        ttk.Button(footer, text=tr("Przenieś zaznaczone do „Duplikaty”"), command=self.move_selected,
-                   style="Danger.TButton").pack(side="left")
-        statusbar = ttk.Frame(self.main, style="App.TFrame")
-        statusbar.grid(row=5, column=0, sticky="ew", pady=(8, 0))
+        statusbar = ttk.Frame(self.root, style="StatusBar.TFrame", padding=(12, 6))
+        statusbar.grid(row=4, column=0, sticky="ew")
+        statusbar.grid_columnconfigure(0, weight=1)
         self.status_label = ttk.Label(statusbar, textvariable=self.status, style="Status.TLabel", anchor="w")
-        self.status_label.pack(side="left", fill="x", expand=True)
+        self.status_label.grid(row=0, column=0, sticky="ew")
         self.scan_counts = tk.StringVar(value="Znalezione pliki: 0  |  Przeskanowane: 0/0")
         self.counts_label = ttk.Label(statusbar, textvariable=self.scan_counts, style="Status.TLabel", anchor="e")
-        self.counts_label.pack(side="right", padx=(10, 10))
-        self.progress = ttk.Progressbar(statusbar, mode="determinate", length=125, maximum=1)
-        self.progress.pack(side="right")
+        self.counts_label.grid(row=0, column=1, padx=(10, 10))
+        self.progress = ttk.Progressbar(statusbar, mode="determinate", length=135, maximum=1)
+        self.progress.grid(row=0, column=2)
 
     def apply_theme(self):
         p = self.PALETTES[self.theme_name]
