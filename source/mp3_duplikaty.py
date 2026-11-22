@@ -18,7 +18,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
 APP_TITLE = "Mp3 Duplicate Finder"
-APP_VERSION = "1.3.0"
+APP_VERSION = "1.4.0"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
@@ -113,7 +113,7 @@ def read_id3_tags(path):
         for key in ("TIT2", "TPE1", "TALB", "TRCK", "TDRC", "TCON"):
             value = tags.get(key)
             if value:
-                result[key] = str(value).strip().casefold()
+                result[key] = str(value).strip()
         return result
     except Exception:
         return {}
@@ -154,7 +154,7 @@ def comparison_notes(a, b):
                   ("TRCK", "numer utworu"), ("TDRC", "rok"), ("TCON", "gatunek"))
     for key, label in tag_labels:
         va, vb = a.get("tags", {}).get(key), b.get("tags", {}).get(key)
-        if va and vb and va == vb:
+        if va and vb and va.casefold() == vb.casefold():
             notes.append("ten sam " + label)
     return ", ".join(notes)
 
@@ -196,9 +196,10 @@ class App:
         self.root.title(APP_TITLE)
         self.root.geometry("1240x800")
         # Minimalny rozmiar chroni stałe sekcje sterujące przed obcięciem.
-        self.root.minsize(1180, 740)
+        self.root.minsize(1160, 700)
         self.events = queue.Queue()
         self.results = []
+        self.scanned_items = []
         self.folder = tk.StringVar()
         self.status = tk.StringVar(value="Wybierz folder z muzyką, aby rozpocząć.")
         self.threshold = tk.DoubleVar(value=0.82)
@@ -242,10 +243,17 @@ class App:
         self.style = ttk.Style()
         self.style.theme_use("clam")
 
-        self.main = ttk.Frame(self.root, padding=20, style="App.TFrame")
-        self.main.pack(fill="both", expand=True)
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
+        self.main = ttk.Frame(self.root, padding=14, style="App.TFrame")
+        self.main.grid(row=0, column=0, sticky="nsew")
         self.main.grid_columnconfigure(0, weight=1)
-        self.main.grid_rowconfigure(3, weight=1)
+        self.main.grid_rowconfigure(0, minsize=68, weight=0)
+        self.main.grid_rowconfigure(1, minsize=88, weight=0)
+        self.main.grid_rowconfigure(2, minsize=112, weight=0)
+        self.main.grid_rowconfigure(3, minsize=180, weight=1)
+        self.main.grid_rowconfigure(4, minsize=42, weight=0)
+        self.main.grid_rowconfigure(5, minsize=30, weight=0)
 
         header = ttk.Frame(self.main, style="App.TFrame")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 12))
@@ -494,9 +502,9 @@ class App:
                             output.append((b, f"Podobny utwór ↔ {a['path'].name}{suffix}", f"{score * 100:.1f}%", b_is_lower))
                     if checked % 100 == 0 or checked == total_pairs:
                         self.events.put(("compare_progress", checked, total_pairs, len(files)))
-            self.events.put(("done", output, len(files), len(items), None, self.cancel_event.is_set()))
+            self.events.put(("done", output, items, len(files), len(items), None, self.cancel_event.is_set()))
         except Exception as exc:
-            self.events.put(("done", [], 0, 0, str(exc), False))
+            self.events.put(("done", [], [], 0, 0, str(exc), False))
 
     def _poll(self):
         try:
@@ -528,7 +536,7 @@ class App:
                     self.stop_play_btn.configure(state="disabled")
                     self.status.set(msg[1])
                 elif msg[0] == "done":
-                    _, rows, total, ok, error, cancelled = msg
+                    _, rows, inventory, total, ok, error, cancelled = msg
                     self.progress.configure(value=0)
                     self.scan_btn.configure(state="normal")
                     self.stop_btn.configure(state="disabled")
@@ -540,11 +548,10 @@ class App:
                         messagebox.showerror(APP_TITLE, error)
                         continue
                     self.results = rows
+                    self.scanned_items = inventory
                     seen = set()
-                    auto_select_paths = set()
+                    duplicate_paths = {str(item["path"]) for item, *_ in rows}
                     for item, kind, score, lower_quality in rows:
-                        if lower_quality:
-                            auto_select_paths.add(str(item["path"]))
                         key = (str(item["path"]), kind, score)
                         if key in seen:
                             continue
@@ -553,15 +560,20 @@ class App:
                             f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])),
                             tags=("lower_quality",) if lower_quality else ())
                     auto_select = [iid for iid in self.tree.get_children()
-                                   if self.tree.item(iid, "values")[4] in auto_select_paths]
+                                   if self.tree.item(iid, "values")[4] in duplicate_paths]
                     if auto_select:
                         self.tree.selection_set(auto_select)
-                    self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {len(auto_select)} słabszych kopii")
+                    selected_files = len({self.tree.item(iid, "values")[4] for iid in auto_select})
+                    self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {selected_files} plików z duplikatami")
                     found_files = len({str(item["path"]) for item, _, _, _ in rows})
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
                     self.status.set("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki." if cancelled else "Zakończono. Sprawdź wyniki przed przenoszeniem.")
                     if not seen and not cancelled:
                         self.status.set("Zakończono. Nie znaleziono dopasowań.")
+                    if not cancelled and total > 0:
+                        if messagebox.askyesno(APP_TITLE,
+                            f"Skanowanie zakończone. Przeskanowano {ok} plików MP3.\\n\\nCzy wygenerować plik CSV z nazwą, lokalizacją, tagami MP3 i bitrate?"):
+                            self.export_csv()
         except queue.Empty:
             pass
         self.root.after(100, self._poll)
@@ -696,22 +708,28 @@ class App:
         self.status.set(f"Przeniesiono plików: {moved}.")
 
     def export_csv(self):
-        if not self.tree.get_children():
-            messagebox.showinfo(APP_TITLE, "Brak wyników do eksportu.")
+        if not self.scanned_items:
+            messagebox.showinfo(APP_TITLE, "Brak zeskanowanych plików MP3 do eksportu.")
             return
         dest = filedialog.asksaveasfilename(defaultextension=".csv",
-            filetypes=[("CSV", "*.csv")], initialfile="duplikaty_mp3.csv")
+            filetypes=[("CSV", "*.csv")], initialfile="biblioteka_mp3.csv")
         if not dest:
             return
+        tag_names = {
+            "TIT2": "Tytuł", "TPE1": "Wykonawca", "TALB": "Album",
+            "TRCK": "Numer utworu", "TDRC": "Rok", "TCON": "Gatunek"
+        }
         with open(dest, "w", newline="", encoding="utf-8-sig") as f:
             writer = csv.writer(f, delimiter=";")
-            writer.writerow(["Rodzaj dopasowania", "Zgodność fingerprintu", "Jakość MP3", "Rozmiar", "Plik"])
-            for item_id in self.tree.get_children():
-                writer.writerow(self.tree.item(item_id, "values"))
-        messagebox.showinfo(APP_TITLE, "Zapisano raport CSV.")
-
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    App(root)
-    root.mainloop()
+            writer.writerow(["Nazwa", "Lokalizacja", "Tagi MP3", "Bitrate (kb/s)"])
+            for item in sorted(self.scanned_items, key=lambda x: str(x["path"]).casefold()):
+                path = Path(item["path"])
+                tags = item.get("tags", {})
+                tag_text = " | ".join(
+                    f"{tag_names[key]}: {tags[key]}" for key in tag_names if tags.get(key)
+                )
+                bitrate = item.get("quality", {}).get("bitrate", 0)
+                writer.writerow([path.name, str(path.parent), tag_text,
+                    f"{bitrate / 1000:.0f}" if bitrate else ""])
+        messagebox.showinfo(APP_TITLE,
+            f"Zapisano raport CSV. Liczba plików: {len(self.scanned_items)}.")
