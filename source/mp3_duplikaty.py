@@ -946,6 +946,7 @@ class App:
             return
         imported = []
         reusable = {}
+        imported_results = []
         try:
             with open(source, "r", newline="", encoding="utf-8-sig") as f:
                 sample = f.read(4096)
@@ -992,7 +993,7 @@ class App:
                     duplicate_label = (row.get("Duplikat") or row.get("Duplicate") or "").strip()
                     if duplicate_label.startswith("TAK") or duplicate_label.upper().startswith("YES"):
                         kind = "Identyczna zawartość audio" if "identyczny" in duplicate_label.lower() or "identical" in duplicate_label.lower() else "Podobny utwór (z importowanego raportu)"
-                        self.results.append((item, kind, "100.0%" if kind == "Identyczna zawartość audio" else "", False))
+                        imported_results.append((item, kind, "100.0%" if kind == "Identyczna zawartość audio" else "", False))
         except Exception as exc:
             messagebox.showerror(APP_TITLE, f"Nie udało się wczytać CSV:\\n{exc}")
             return
@@ -1001,6 +1002,7 @@ class App:
             return
         self.cache_items = reusable
         self.scanned_items = imported
+        self.results = imported_results
         self.tree.delete(*self.tree.get_children())
         for item, kind, score, lower_quality in self.results:
             path = Path(item["path"])
