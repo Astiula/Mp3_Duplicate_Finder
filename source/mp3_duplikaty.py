@@ -87,7 +87,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
@@ -331,12 +331,10 @@ class App:
         ttk.Button(titlebar, text=tr("O programie"), command=self.show_about,
                    style="RibbonSmall.TButton").grid(row=0, column=3)
 
-        tabs = ttk.Frame(self.root, style="RibbonTabs.TFrame", padding=(12, 0))
+        tabs = ttk.Frame(self.root, style="RibbonTabs.TFrame", padding=(14, 0, 14, 0))
         tabs.grid(row=1, column=0, sticky="ew")
         ttk.Label(tabs, text=tr("Narzędzia główne"), style="RibbonTabActive.TLabel",
-                  padding=(12, 7)).pack(side="left")
-        ttk.Label(tabs, text=tr("Analiza biblioteki"), style="RibbonTab.TLabel",
-                  padding=(12, 7)).pack(side="left")
+                  padding=(0, 5)).pack(side="left")
 
         ribbon = ttk.Frame(self.root, style="Ribbon.TFrame", padding=(10, 9, 10, 7))
         ribbon.grid(row=2, column=0, sticky="ew")
@@ -384,8 +382,8 @@ class App:
         export = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         export.grid(row=0, column=2, sticky="nsew", padx=7)
         ttk.Label(export, text=tr("Raport"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
-        ttk.Button(export, text="▤\n" + tr("Eksportuj CSV"), command=self.export_csv,
-                   style="RibbonLarge.TButton").pack(fill="both", expand=True, pady=(4, 0))
+        ttk.Button(export, text="⇩  " + tr("Eksportuj CSV"), command=self.export_csv,
+                   style="RibbonSmall.TButton").pack(fill="x", expand=True, pady=(10, 0))
 
         # Group 4 — preview and navigation.
         audio = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
@@ -393,27 +391,36 @@ class App:
         ttk.Label(audio, text=tr("Odsłuch i pliki"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
         audio_row = ttk.Frame(audio, style="RibbonGroup.TFrame")
         audio_row.pack(fill="x", expand=True, pady=(4, 0))
-        ttk.Button(audio_row, text="▶\n" + tr("Odsłuch 15 s"), command=self.play_selected,
-                   style="RibbonLarge.TButton").pack(side="left", fill="both", expand=True, padx=(0, 3))
-        ttk.Button(audio_row, text="■\n" + tr("Stop audio"), command=self.stop_playback,
-                   style="RibbonLarge.TButton").pack(side="left", fill="both", expand=True, padx=3)
-        ttk.Button(audio_row, text="⌕\n" + tr("Otwórz folder"), command=self.open_location,
-                   style="RibbonLarge.TButton").pack(side="left", fill="both", expand=True, padx=(3, 0))
+        self.play_btn = ttk.Button(audio_row, text="▶  " + tr("Odsłuch 15 s"), command=self.play_selected,
+                                   style="RibbonSmall.TButton")
+        self.play_btn.pack(side="left", fill="x", expand=True, padx=(0, 3))
+        self.stop_play_btn = ttk.Button(audio_row, text="■  " + tr("Stop audio"), command=self.stop_playback,
+                                        style="RibbonSmall.TButton", state="disabled")
+        self.stop_play_btn.pack(side="left", fill="x", expand=True, padx=3)
+        ttk.Button(audio_row, text="↗  " + tr("Otwórz folder"), command=self.open_location,
+                   style="RibbonSmall.TButton").pack(side="left", fill="x", expand=True, padx=(3, 0))
 
         # Group 5 — file management.
         manage = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
         manage.grid(row=0, column=4, sticky="nsew", padx=(7, 0))
         ttk.Label(manage, text=tr("Zarządzanie"), style="RibbonGroupTitle.TLabel").pack(anchor="w")
-        ttk.Button(manage, text="⇢\n" + tr("Przenieś do Duplikaty"),
-                   command=self.move_selected, style="RibbonLargeDanger.TButton").pack(
-                       fill="both", expand=True, pady=(4, 0))
+        ttk.Button(manage, text="⇢  " + tr("Przenieś do Duplikaty"),
+                   command=self.move_selected, style="RibbonSmall.TButton").pack(
+                       fill="x", expand=True, pady=(10, 0))
 
         # Short explanatory line under the ribbon.
         hint = ttk.Frame(self.root, style="App.TFrame", padding=(14, 2, 14, 7))
         hint.grid(row=3, column=0, sticky="nsew")
         hint.grid_rowconfigure(1, weight=1)
         hint.grid_columnconfigure(0, weight=1)
-        ttk.Label(hint, text=tr("Wyniki analizy"), style="ResultsTitle.TLabel").grid(row=0, column=0, sticky="w", pady=(0, 5))
+        results_head = ttk.Frame(hint, style="App.TFrame")
+        results_head.grid(row=0, column=0, sticky="ew", pady=(0, 7))
+        results_head.grid_columnconfigure(0, weight=1)
+        ttk.Label(results_head, text=tr("Wyniki analizy"), style="ResultsTitle.TLabel").grid(
+            row=0, column=0, sticky="w")
+        self.count_label = ttk.Label(results_head, text="Gotowe do skanowania",
+                                     style="ResultsCount.TLabel")
+        self.count_label.grid(row=0, column=1, sticky="e")
 
         table_wrap = ttk.Frame(hint, style="Card.TFrame", padding=7)
         table_wrap.grid(row=1, column=0, sticky="nsew")
@@ -466,7 +473,9 @@ class App:
         self.style.configure("Status.TLabel", background=p["bg"], foreground=p["muted"], font=("Segoe UI", 9))
         self.style.configure("RibbonTabs.TFrame", background=p["surface"])
         self.style.configure("Ribbon.TFrame", background=p["surface"])
-        self.style.configure("RibbonGroup.TFrame", background=p["surface"])
+        self.style.configure("RibbonGroup.TFrame", background=p["bg"])
+        self.style.configure("ResultsCount.TLabel", background=p["bg"], foreground=p["muted"],
+                             font=("Segoe UI", 9))
         self.style.configure("StatusBar.TFrame", background=p["surface"], relief="solid", borderwidth=1)
         self.style.configure("RibbonTitle.TLabel", background=p["bg"], foreground=p["text"],
                              font=("Segoe UI", 15, "bold"))
@@ -485,7 +494,8 @@ class App:
         self.style.configure("ResultsTitle.TLabel", background=p["bg"], foreground=p["text"],
                              font=("Segoe UI", 11, "bold"))
         self.style.configure("RibbonSmall.TButton", background=p["surface"], foreground=p["text"],
-                             padding=(8, 5), borderwidth=1, bordercolor=p["border"])
+                             padding=(7, 6), borderwidth=1, bordercolor=p["border"],
+                             font=("Segoe UI", 9))
         self.style.map("RibbonSmall.TButton", background=[("active", p["border"])])
         self.style.configure("RibbonLarge.TButton", background=p["surface"], foreground=p["text"],
                              padding=(5, 6), borderwidth=1, bordercolor=p["border"],
@@ -715,6 +725,12 @@ class App:
                             self.export_csv()
         except queue.Empty:
             pass
+        except Exception as exc:
+            # A UI callback error must not permanently stop the event queue.
+            try:
+                self.status.set(f"Błąd interfejsu: {exc}")
+            except Exception:
+                pass
         self.root.after(100, self._poll)
 
     def selected_paths(self):
