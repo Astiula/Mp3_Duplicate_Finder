@@ -481,7 +481,7 @@ class App:
         design_colors = {
             "fluent": {},
             "classic": {"bg": "#E9EDF2", "surface": "#F8FAFC", "text": "#1F2937", "muted": "#526273", "accent": "#075985", "accent_hover": "#0C4A6E", "border": "#B8C4D1", "tree": "#FFFFFF", "selected": "#D7E7F5"},
-            "dark_pro": {"bg": "#0B1220", "surface": "#121D2E", "text": "#E5EDF7", "muted": "#91A4BC", "accent": "#22D3EE", "accent_hover": "#06B6D4", "border": "#26364D", "tree": "#0E1929", "selected": "#164E63"},
+            "dark_pro": {"muted": "#91A4BC", "accent": "#0891B2", "accent_hover": "#0E7490", "border": "#26364D"},
             "dashboard": {"bg": "#F4F2FA", "surface": "#FFFFFF", "text": "#24213A", "muted": "#716B87", "accent": "#6D4AFF", "accent_hover": "#5636D9", "border": "#E1DDF0", "tree": "#FFFFFF", "selected": "#E9E3FF"},
             "explorer": {"bg": "#F1F4F6", "surface": "#FFFFFF", "text": "#202B36", "muted": "#657482", "accent": "#0F766E", "accent_hover": "#115E59", "border": "#D5DDE3", "tree": "#FFFFFF", "selected": "#D9F0EC"}
         }
