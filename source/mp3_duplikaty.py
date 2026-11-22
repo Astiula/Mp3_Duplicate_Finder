@@ -734,3 +734,35 @@ class App:
                     f"{bitrate / 1000:.0f}" if bitrate else ""])
         messagebox.showinfo(APP_TITLE,
             f"Zapisano raport CSV. Liczba plików: {len(self.scanned_items)}.")
+
+def main():
+    root = tk.Tk()
+    app = App(root)
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        import traceback
+        error_text = traceback.format_exc()
+        try:
+            log_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Mp3DuplicateFinder"
+            log_dir.mkdir(parents=True, exist_ok=True)
+            (log_dir / "startup_error.log").write_text(error_text, encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            fallback = tk.Tk()
+            fallback.withdraw()
+            messagebox.showerror(
+                APP_TITLE,
+                "Nie udało się uruchomić aplikacji. Szczegóły zapisano w pliku:\n"
+                + str(Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Mp3DuplicateFinder" / "startup_error.log")
+                + "\n\n" + str(exc)
+            )
+            fallback.destroy()
+        except Exception:
+            pass
+        raise
