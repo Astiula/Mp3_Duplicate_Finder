@@ -62,16 +62,16 @@ jobs:
           $fpcalcPath = (Resolve-Path "fpcalc.exe").Path
           @'
           VSVersionInfo(
-            ffi=FixedFileInfo(filevers=(1, 5, 5, 0), prodvers=(1, 5, 5, 0),
+            ffi=FixedFileInfo(filevers=(1, 5, 6, 0), prodvers=(1, 5, 6, 0),
               mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
             kids=[
               StringFileInfo([StringTable('040904B0', [
                 StringStruct('CompanyName', 'Konrad Astachow (Kondar)'),
                 StringStruct('FileDescription', 'MP3 Duplicate Finder — Glassy Modern'),
-                StringStruct('FileVersion', '1.5.5'),
+                StringStruct('FileVersion', '1.5.6'),
                 StringStruct('InternalName', 'Mp3_Duplicate_Finder'),
                 StringStruct('ProductName', 'MP3 Duplicate Finder'),
-                StringStruct('ProductVersion', '1.5.5'),
+                StringStruct('ProductVersion', '1.5.6'),
                 StringStruct('LegalCopyright', 'Copyright 2026 Konrad Astachow (Kondar)')
               ])]),
               VarFileInfo([VarStruct('Translation', [1033, 1200])])
@@ -79,17 +79,17 @@ jobs:
           )
           '@ | Set-Content -Encoding utf8 version_info.txt
           $versionPath = (Resolve-Path "version_info.txt").Path
-          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.5_Glassy_Modern --distpath dist --workpath build --specpath spec --version-file "$versionPath" --add-binary "$ffmpegPath;." --add-binary "$fpcalcPath;." source/mp3_duplikaty.py
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.6_Glassy_Modern --distpath dist --workpath build --specpath spec --version-file "$versionPath" --add-binary "$ffmpegPath;." --add-binary "$fpcalcPath;." source/mp3_duplikaty.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
-          $exe = "dist/Mp3_Duplicate_Finder_1.5.5_Glassy_Modern.exe"
+          $exe = "dist/Mp3_Duplicate_Finder_1.5.6_Glassy_Modern.exe"
           if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Missing or invalid EXE" }
           Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File "dist/SHA256.txt"
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Mp3-Duplicate-Finder-1.5.5-Glassy-Modern
+          name: Mp3-Duplicate-Finder-1.5.6-Glassy-Modern
           path: |
-            dist/Mp3_Duplicate_Finder_1.5.5_Glassy_Modern.exe
+            dist/Mp3_Duplicate_Finder_1.5.6_Glassy_Modern.exe
             dist/SHA256.txt
           if-no-files-found: error
