@@ -89,12 +89,13 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.8"
+APP_VERSION = "1.5.9"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
 LICENSE_TEXT = """LICENCJA APLIKACJI
 Kod aplikacji Mp3 Duplicate Finder: © 2026 Konrad Astachow (Kondar).
+Kontakt: kondar@int.pl
 Wszelkie prawa zastrzeżone. Brak zgody na sublicencjonowanie,
 modyfikowanie i redystrybucję kodu aplikacji poza uprawnieniami
 wynikającymi z bezwzględnie obowiązujących przepisów.
