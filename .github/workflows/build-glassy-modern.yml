@@ -68,10 +68,10 @@ jobs:
               StringFileInfo([StringTable('040904B0', [
                 StringStruct('CompanyName', 'Konrad Astachow (Kondar)'),
                 StringStruct('FileDescription', 'MP3 Duplicate Finder — Glassy Modern'),
-                StringStruct('FileVersion', '1.5.7'),
+                StringStruct('FileVersion', '1.5.8'),
                 StringStruct('InternalName', 'Mp3_Duplicate_Finder'),
                 StringStruct('ProductName', 'MP3 Duplicate Finder'),
-                StringStruct('ProductVersion', '1.5.7'),
+                StringStruct('ProductVersion', '1.5.8'),
                 StringStruct('LegalCopyright', 'Copyright 2026 Konrad Astachow (Kondar)')
               ])]),
               VarFileInfo([VarStruct('Translation', [1033, 1200])])
@@ -79,17 +79,17 @@ jobs:
           )
           '@ | Set-Content -Encoding utf8 version_info.txt
           $versionPath = (Resolve-Path "version_info.txt").Path
-          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.7_Glassy_Modern --distpath dist --workpath build --specpath spec --version-file "$versionPath" --add-binary "$ffmpegPath;." --add-binary "$fpcalcPath;." source/mp3_duplikaty.py
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.8_Glassy_Modern --distpath dist --workpath build --specpath spec --version-file "$versionPath" --add-binary "$ffmpegPath;." --add-binary "$fpcalcPath;." source/mp3_duplikaty.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed" }
-          $exe = "dist/Mp3_Duplicate_Finder_1.5.7_Glassy_Modern.exe"
+          $exe = "dist/Mp3_Duplicate_Finder_1.5.8_Glassy_Modern.exe"
           if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Missing or invalid EXE" }
           Get-FileHash $exe -Algorithm SHA256 | Format-List | Out-File "dist/SHA256.txt"
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Mp3-Duplicate-Finder-1.5.7-Glassy-Modern
+          name: Mp3-Duplicate-Finder-1.5.8-Glassy-Modern
           path: |
-            dist/Mp3_Duplicate_Finder_1.5.7_Glassy_Modern.exe
+            dist/Mp3_Duplicate_Finder_1.5.8_Glassy_Modern.exe
             dist/SHA256.txt
           if-no-files-found: error
