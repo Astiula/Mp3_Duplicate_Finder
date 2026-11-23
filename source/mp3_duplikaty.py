@@ -666,8 +666,8 @@ class App:
              "Pasek stanu pokazuje postęp i liczbę znalezionych oraz przeskanowanych plików."),
         ]
         for heading, body in sections:
-            help_text.insert("end", heading + "\\n", "heading")
-            help_text.insert("end", body + "\\n", "body")
+            help_text.insert("end", heading + "\n", "heading")
+            help_text.insert("end", body + "\n\n", "body")
         help_text.configure(state="disabled")
         ttk.Button(frame, text="Zamknij", command=win.destroy,
                    style="Primary.TButton").pack(anchor="e", pady=(12, 0))
