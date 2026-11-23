@@ -138,7 +138,7 @@ jobs:
                 StringStruct('FileDescription', 'MP3 Duplicate Finder'),
                 StringStruct('FileVersion', '1.5.9'),
                 StringStruct('InternalName', 'Mp3_Duplicate_Finder'),
-                StringStruct('OriginalFilename', 'Mp3_Duplicate_Finder.exe'),
+                StringStruct('OriginalFilename', 'Mp3_Duplicate_Finder_1.5.9.exe'),
                 StringStruct('ProductName', 'MP3 Duplicate Finder'),
                 StringStruct('ProductVersion', '1.5.9'),
                 StringStruct('LegalCopyright', 'Copyright 2026 Konrad Astachow (Kondar)')
@@ -147,15 +147,15 @@ jobs:
             ]
           )
           '@ | Set-Content -Encoding utf8 "version_info.txt"
-          pyinstaller --noconfirm --clean --onedir --windowed --noupx --name Mp3_Duplicate_Finder --version-file version_info.txt --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
-          if (!(Test-Path "dist/Mp3_Duplicate_Finder_1.5.9/Mp3_Duplicate_Finder.exe")) { throw "EXE build failed" }
+          pyinstaller --noconfirm --clean --onedir --windowed --noupx --name Mp3_Duplicate_Finder_1.5.9 --version-file version_info.txt --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
+          if (!(Test-Path "dist/Mp3_Duplicate_Finder_1.5.9/Mp3_Duplicate_Finder_1.5.9.exe")) { throw "EXE build failed" }
 
       - name: Check executable and create checksums
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
         run: |
-          $root = (Resolve-Path "dist/Mp3_Duplicate_Finder").Path
-          $exe = Join-Path $root "Mp3_Duplicate_Finder.exe"
+          $root = (Resolve-Path "dist/Mp3_Duplicate_Finder_1.5.9").Path
+          $exe = Join-Path $root "Mp3_Duplicate_Finder_1.5.9.exe"
           if ((Get-Item $exe).Length -lt 1000000) { throw "Executable unexpectedly small" }
           Get-ChildItem $root -File -Recurse | Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
             Get-FileHash -Algorithm SHA256 |
@@ -173,9 +173,9 @@ jobs:
             Where-Object { $_.FullName.Contains('\\x64\\signtool.exe') } |
             Sort-Object FullName -Descending | Select-Object -First 1
           if (!$signtool) { throw "signtool.exe not found" }
-          & $signtool.FullName sign /f "$env:RUNNER_TEMP\codesign.pfx" /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/Mp3_Duplicate_Finder_1.5.9/Mp3_Duplicate_Finder.exe"
+          & $signtool.FullName sign /f "$env:RUNNER_TEMP\codesign.pfx" /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/Mp3_Duplicate_Finder_1.5.9/Mp3_Duplicate_Finder_1.5.9.exe"
           if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed" }
-          & $signtool.FullName verify /pa /v "dist/Mp3_Duplicate_Finder_1.5.9/Mp3_Duplicate_Finder.exe"
+          & $signtool.FullName verify /pa /v "dist/Mp3_Duplicate_Finder_1.5.9/Mp3_Duplicate_Finder_1.5.9.exe"
           if ($LASTEXITCODE -ne 0) { throw "Authenticode signature verification failed" }
 
       - name: Package application and notices
@@ -208,7 +208,7 @@ jobs:
           $ffmpeg = (Resolve-Path "ffmpeg.exe").Path
           $fpcalc = (Resolve-Path "fpcalc.exe").Path
           $versionInfo = (Resolve-Path "version_info.txt").Path
-          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_Portable --version-file "$versionInfo" --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "$ffmpeg;." --add-binary "$fpcalc;." mp3_duplikaty.py
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.9_Portable --version-file "$versionInfo" --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "$ffmpeg;." --add-binary "$fpcalc;." mp3_duplikaty.py
           $exe = "dist-portable/Mp3_Duplicate_Finder_1.5.9_Portable.exe"
           if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Standalone EXE build failed" }
           Copy-Item README.txt, THIRD_PARTY_NOTICES.txt, FFMPEG_LICENSE.txt, CHROMAPRINT_LICENSE.txt, APP_LICENSE.txt dist-portable/
