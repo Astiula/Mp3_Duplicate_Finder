@@ -71,7 +71,8 @@ TRANSLATIONS = {
     "tytuł": "title", "Wyszukiwanie plików MP3…": "Searching for MP3 files…",
     "Skanowanie plików": "Scanning files", "Identyczna zawartość audio": "Identical audio content",
     "Porównywanie odcisków audio…": "Comparing audio fingerprints…",
-    "Błąd analizy": "Scan error", "Wystąpił błąd podczas analizy.": "An error occurred during the scan.",
+    "Błąd analizy": "Scan error",
+    "Analiza w toku…": "Analysis in progress…", "Wystąpił błąd podczas analizy.": "An error occurred during the scan.",
     "Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki.": "Scan stopped. Results collected so far are displayed.",
     "Zakończono. Sprawdź wyniki przed przenoszeniem.": "Finished. Review the results before moving files.",
     "Zakończono. Nie znaleziono dopasowań.": "Finished. No matches found.",
@@ -88,7 +89,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.7"
+APP_VERSION = "1.5.8"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -761,6 +762,7 @@ class App:
             for i, path in enumerate(files, 1):
                 if self.cancel_event.is_set():
                     break
+                self.events.put(("file_progress", str(path)))
                 try:
                     stat = path.stat()
                     cached = cached_items.get(str(path.resolve()))
@@ -824,6 +826,10 @@ class App:
                     total = msg[1]
                     self.progress.configure(maximum=max(total, 1), value=0)
                     self.scan_counts.set(f"Znalezione pliki: 0  |  Przeskanowane: 0/{total}")
+                elif msg[0] == "file_progress":
+                    raw_path = msg[1]
+                    short_path = raw_path if len(raw_path) <= 15 else "…" + raw_path[-14:]
+                    self.count_label.configure(text=f"{tr('Analiza w toku…')}  |  {short_path}")
                 elif msg[0] == "progress":
                     _, stage, current, total = msg
                     self.progress.configure(mode="determinate", maximum=max(total, 1), value=current)
