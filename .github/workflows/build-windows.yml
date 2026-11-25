@@ -36,7 +36,7 @@ jobs:
           podobnych nagrań po ponownym kodowaniu z użyciem Chromaprint.
 
           Użycie:
-          1. Uruchom Mp3_Duplicate_Finder_1.5.10.exe.
+          1. Uruchom Mp3_Duplicate_Finder_1.5.11.exe.
           2. Wybierz folder z muzyką.
           3. Ustaw próg zgodności fingerprintu (domyślnie 0.82).
           4. Kliknij Skanuj MP3.
@@ -130,32 +130,32 @@ jobs:
         run: |
           @'
           VSVersionInfo(
-            ffi=FixedFileInfo(filevers=(1, 5, 10, 0), prodvers=(1, 5, 10, 0),
+            ffi=FixedFileInfo(filevers=(1, 5, 11, 0), prodvers=(1, 5, 11, 0),
               mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0, 0)),
             kids=[
               StringFileInfo([StringTable('040904B0', [
                 StringStruct('CompanyName', 'Konrad Astachow (Kondar)'),
                 StringStruct('FileDescription', 'MP3 Duplicate Finder'),
-                StringStruct('FileVersion', '1.5.10'),
+                StringStruct('FileVersion', '1.5.11'),
                 StringStruct('InternalName', 'Mp3_Duplicate_Finder'),
-                StringStruct('OriginalFilename', 'Mp3_Duplicate_Finder_1.5.10.exe'),
+                StringStruct('OriginalFilename', 'Mp3_Duplicate_Finder_1.5.11.exe'),
                 StringStruct('ProductName', 'MP3 Duplicate Finder'),
-                StringStruct('ProductVersion', '1.5.10'),
+                StringStruct('ProductVersion', '1.5.11'),
                 StringStruct('LegalCopyright', 'Copyright 2026 Konrad Astachow (Kondar)')
               ])]),
               VarFileInfo([VarStruct('Translation', [1033, 1200])])
             ]
           )
           '@ | Set-Content -Encoding utf8 "version_info.txt"
-          pyinstaller --noconfirm --clean --onedir --windowed --noupx --name Mp3_Duplicate_Finder_1.5.10 --version-file version_info.txt --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
-          if (!(Test-Path "dist/Mp3_Duplicate_Finder_1.5.10/Mp3_Duplicate_Finder_1.5.10.exe")) { throw "EXE build failed" }
+          pyinstaller --noconfirm --clean --onedir --windowed --noupx --name Mp3_Duplicate_Finder_1.5.11 --version-file version_info.txt --add-binary "ffmpeg.exe;." --add-binary "fpcalc.exe;." mp3_duplikaty.py
+          if (!(Test-Path "dist/Mp3_Duplicate_Finder_1.5.11/Mp3_Duplicate_Finder_1.5.11.exe")) { throw "EXE build failed" }
 
       - name: Check executable and create checksums
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
         run: |
-          $root = (Resolve-Path "dist/Mp3_Duplicate_Finder_1.5.10").Path
-          $exe = Join-Path $root "Mp3_Duplicate_Finder_1.5.10.exe"
+          $root = (Resolve-Path "dist/Mp3_Duplicate_Finder_1.5.11").Path
+          $exe = Join-Path $root "Mp3_Duplicate_Finder_1.5.11.exe"
           if ((Get-Item $exe).Length -lt 1000000) { throw "Executable unexpectedly small" }
           Get-ChildItem $root -File -Recurse | Where-Object { $_.Name -ne "SHA256SUMS.txt" } |
             Get-FileHash -Algorithm SHA256 |
@@ -173,16 +173,16 @@ jobs:
             Where-Object { $_.FullName.Contains('\\x64\\signtool.exe') } |
             Sort-Object FullName -Descending | Select-Object -First 1
           if (!$signtool) { throw "signtool.exe not found" }
-          & $signtool.FullName sign /f "$env:RUNNER_TEMP\codesign.pfx" /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/Mp3_Duplicate_Finder_1.5.10/Mp3_Duplicate_Finder_1.5.10.exe"
+          & $signtool.FullName sign /f "$env:RUNNER_TEMP\codesign.pfx" /p $env:SIGN_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 "dist/Mp3_Duplicate_Finder_1.5.11/Mp3_Duplicate_Finder_1.5.11.exe"
           if ($LASTEXITCODE -ne 0) { throw "Authenticode signing failed" }
-          & $signtool.FullName verify /pa /v "dist/Mp3_Duplicate_Finder_1.5.10/Mp3_Duplicate_Finder_1.5.10.exe"
+          & $signtool.FullName verify /pa /v "dist/Mp3_Duplicate_Finder_1.5.11/Mp3_Duplicate_Finder_1.5.11.exe"
           if ($LASTEXITCODE -ne 0) { throw "Authenticode signature verification failed" }
 
       - name: Package application and notices
         shell: pwsh
         working-directory: mp3_duplikaty_paczka
         run: |
-          Copy-Item README.txt, THIRD_PARTY_NOTICES.txt, FFMPEG_LICENSE.txt, CHROMAPRINT_LICENSE.txt, APP_LICENSE.txt dist/Mp3_Duplicate_Finder_1.5.10/
+          Copy-Item README.txt, THIRD_PARTY_NOTICES.txt, FFMPEG_LICENSE.txt, CHROMAPRINT_LICENSE.txt, APP_LICENSE.txt dist/Mp3_Duplicate_Finder_1.5.11/
           @'
           SECURITY AND VERIFICATION
           Download only from the official GitHub repository Actions artifact.
@@ -191,13 +191,13 @@ jobs:
           File moving requires an explicit user action in the application.
           Third-party component licenses are included in this folder.
           An unsigned build may still trigger SmartScreen due to lack of publisher reputation.
-          '@ | Set-Content -Encoding utf8 dist/Mp3_Duplicate_Finder_1.5.10/SECURITY.txt
+          '@ | Set-Content -Encoding utf8 dist/Mp3_Duplicate_Finder_1.5.11/SECURITY.txt
 
       - name: Upload Windows application package
         uses: actions/upload-artifact@v7
         with:
-          name: Mp3_Duplicate_Finder-1.5.10-Windows-x64
-          path: mp3_duplikaty_paczka/dist/Mp3_Duplicate_Finder_1.5.10/
+          name: Mp3_Duplicate_Finder-1.5.11-Windows-x64
+          path: mp3_duplikaty_paczka/dist/Mp3_Duplicate_Finder_1.5.11/
           if-no-files-found: error
           retention-days: 30
 
@@ -208,8 +208,8 @@ jobs:
           $ffmpeg = (Resolve-Path "ffmpeg.exe").Path
           $fpcalc = (Resolve-Path "fpcalc.exe").Path
           $versionInfo = (Resolve-Path "version_info.txt").Path
-          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.10_Portable --version-file "$versionInfo" --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "$ffmpeg;." --add-binary "$fpcalc;." mp3_duplikaty.py
-          $exe = "dist-portable/Mp3_Duplicate_Finder_1.5.10_Portable.exe"
+          pyinstaller --noconfirm --clean --onefile --windowed --noupx --name Mp3_Duplicate_Finder_1.5.11_Portable --version-file "$versionInfo" --distpath dist-portable --workpath build-portable --specpath spec-portable --add-binary "$ffmpeg;." --add-binary "$fpcalc;." mp3_duplikaty.py
+          $exe = "dist-portable/Mp3_Duplicate_Finder_1.5.11_Portable.exe"
           if (!(Test-Path $exe) -or (Get-Item $exe).Length -lt 1000000) { throw "Standalone EXE build failed" }
           Copy-Item README.txt, THIRD_PARTY_NOTICES.txt, FFMPEG_LICENSE.txt, CHROMAPRINT_LICENSE.txt, APP_LICENSE.txt dist-portable/
           @'
@@ -220,12 +220,12 @@ jobs:
           has been configured in the repository secrets.
           '@ | Set-Content -Encoding utf8 dist-portable/SECURITY.txt
           $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  Mp3_Duplicate_Finder_1.5.10_Portable.exe" | Set-Content -Encoding ascii dist-portable/SHA256SUMS.txt
+          "$hash  Mp3_Duplicate_Finder_1.5.11_Portable.exe" | Set-Content -Encoding ascii dist-portable/SHA256SUMS.txt
 
       - name: Upload standalone single-file EXE
         uses: actions/upload-artifact@v7
         with:
-          name: Mp3_Duplicate_Finder-1.5.10-Standalone-EXE
+          name: Mp3_Duplicate_Finder-1.5.11-Standalone-EXE
           path: mp3_duplikaty_paczka/dist-portable/
           if-no-files-found: error
           retention-days: 30
