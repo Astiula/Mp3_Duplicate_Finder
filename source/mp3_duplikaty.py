@@ -89,7 +89,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.9"
+APP_VERSION = "1.5.10"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -782,17 +782,31 @@ class App:
                 except Exception as exc:
                     self.events.put(("status", f"Pominięto {path.name}: {exc}"))
                 self.events.put(("progress", "Skanowanie plików", i, len(files)))
+            # Build connected duplicate groups. Exact hashes and sufficiently similar
+            # fingerprints belong to the same group; each group gets one canonical original.
+            parent = list(range(len(items)))
+
+            def find(index):
+                while parent[index] != index:
+                    parent[index] = parent[parent[index]]
+                    index = parent[index]
+                return index
+
+            def union(left, right):
+                root_left, root_right = find(left), find(right)
+                if root_left != root_right:
+                    parent[root_right] = root_left
+
             by_hash = {}
-            for item in items:
-                by_hash.setdefault(item["hash"], []).append(item)
-            output = []
-            for group in by_hash.values():
-                if len(group) > 1:
-                    best = max(group, key=quality_key)
-                    for item in group:
-                        output.append((item, "Identyczna zawartość audio", "100.0%", item is not best))
+            for index, item in enumerate(items):
+                by_hash.setdefault(item["hash"], []).append(index)
+            for indexes in by_hash.values():
+                for index in indexes[1:]:
+                    union(indexes[0], index)
+
             total_pairs = len(items) * (len(items) - 1) // 2
             checked = 0
+            pair_scores = {}
             self.events.put(("compare_init", total_pairs, len(files)))
             for i in range(len(items)):
                 if self.cancel_event.is_set():
@@ -805,14 +819,52 @@ class App:
                     if a["hash"] != b["hash"]:
                         score = fingerprint_similarity(a["fp"], b["fp"])
                         if score >= threshold:
-                            notes = comparison_notes(a, b)
-                            suffix = " | " + notes if notes else ""
-                            a_is_lower = quality_key(a) < quality_key(b)
-                            b_is_lower = quality_key(b) < quality_key(a)
-                            output.append((a, f"Podobny utwór ↔ {b['path'].name}{suffix}", f"{score * 100:.1f}%", a_is_lower))
-                            output.append((b, f"Podobny utwór ↔ {a['path'].name}{suffix}", f"{score * 100:.1f}%", b_is_lower))
+                            union(i, j)
+                            pair_scores[(i, j)] = score
                     if checked % 100 == 0 or checked == total_pairs:
                         self.events.put(("compare_progress", checked, total_pairs, len(files)))
+
+            groups = {}
+            for index in range(len(items)):
+                groups.setdefault(find(index), []).append(index)
+
+            output = []
+            for indexes in groups.values():
+                if len(indexes) < 2:
+                    continue
+                # Highest bitrate, then sample rate, then file size; path breaks ties
+                # deterministically so the same file remains the original on every scan.
+                best_index = min(
+                    indexes,
+                    key=lambda index: (
+                        -quality_key(items[index])[0],
+                        -quality_key(items[index])[1],
+                        -quality_key(items[index])[2],
+                        str(items[index]["path"]).casefold()
+                    )
+                )
+                best = items[best_index]
+                for index in indexes:
+                    item = items[index]
+                    if index == best_index:
+                        kind = "ORYGINAŁ — grupa duplikatów"
+                        score_text = "—"
+                    elif item["hash"] == best["hash"]:
+                        kind = "DUPLIKAT — identyczna zawartość audio"
+                        score_text = "100.0%"
+                    else:
+                        kind = "DUPLIKAT — podobny utwór"
+                        score = pair_scores.get((min(index, best_index), max(index, best_index)))
+                        if score is None:
+                            score = max(
+                                (value for (left, right), value in pair_scores.items()
+                                 if (left == index and right in indexes) or
+                                    (right == index and left in indexes)),
+                                default=0.0
+                            )
+                        score_text = f"{score * 100:.1f}%"
+                    output.append((item, kind, score_text, index != best_index))
+
             self.events.put(("done", output, items, len(files), len(items), None, self.cancel_event.is_set()))
         except Exception as exc:
             self.events.put(("done", [], [], 0, 0, str(exc), False))
@@ -867,7 +919,6 @@ class App:
                     self.cache_items = {str(Path(item["path"]).resolve()): item for item in inventory
                                         if item.get("hash") and item.get("fp")}
                     seen = set()
-                    duplicate_paths = {str(item["path"]) for item, *_ in rows}
                     for item, kind, score, lower_quality in rows:
                         key = (str(item["path"]), kind, score)
                         if key in seen:
@@ -877,7 +928,7 @@ class App:
                             f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])),
                             tags=("lower_quality",) if lower_quality else ())
                     auto_select = [iid for iid in self.tree.get_children()
-                                   if self.tree.item(iid, "values")[4] in duplicate_paths]
+                                   if "lower_quality" in self.tree.item(iid, "tags")]
                     if auto_select:
                         self.tree.selection_set(auto_select)
                     selected_files = len({self.tree.item(iid, "values")[4] for iid in auto_select})
@@ -905,10 +956,11 @@ class App:
         self.root.after(100, self._poll)
 
     def select_suggested_duplicates(self):
-        """Select every duplicate suggestion currently displayed in the results table."""
-        items = self.tree.get_children("")
+        """Select only duplicate copies; canonical originals are never selected."""
+        items = [iid for iid in self.tree.get_children("")
+                 if "lower_quality" in self.tree.item(iid, "tags")]
+        self.tree.selection_remove(self.tree.selection())
         if not items:
-            self.tree.selection_remove(self.tree.selection())
             self.status.set("Brak sugerowanych duplikatów do zaznaczenia.")
             return
         self.tree.selection_set(items)
@@ -917,7 +969,7 @@ class App:
         selected_files = len({self.tree.item(i, "values")[4] for i in items})
         self.count_label.configure(
             text=f"Zaznaczono {len(items)} wyników · {selected_files} plików z duplikatami")
-        self.status.set(f"Zaznaczono wszystkie sugerowane duplikaty: {selected_files} plików.")
+        self.status.set(f"Zaznaczono wyłącznie kopie: {selected_files} plików. Oryginały pozostają niezaznaczone.")
 
     def selected_paths(self):
         return list(dict.fromkeys(Path(self.tree.item(i, "values")[4]) for i in self.tree.selection()))
@@ -1110,7 +1162,7 @@ class App:
                     duplicate_label = (row.get("Duplikat") or row.get("Duplicate") or "").strip()
                     if duplicate_label.startswith("TAK") or duplicate_label.upper().startswith("YES"):
                         kind = "Identyczna zawartość audio" if "identyczny" in duplicate_label.lower() or "identical" in duplicate_label.lower() else "Podobny utwór (z importowanego raportu)"
-                        imported_results.append((item, kind, "100.0%" if kind == "Identyczna zawartość audio" else "", False))
+                        imported_results.append((item, kind, "100.0%" if kind == "Identyczna zawartość audio" else "", True))
         except Exception as exc:
             messagebox.showerror(APP_TITLE, f"Nie udało się wczytać CSV:\\n{exc}")
             return
@@ -1126,6 +1178,10 @@ class App:
             self.tree.insert("", "end", values=(kind, score, quality_label(item),
                 f'{item.get("size", 0) / 1024 / 1024:.1f} MB', str(path)),
                 tags=("lower_quality",) if lower_quality else ())
+        imported_duplicates = [iid for iid in self.tree.get_children("")
+                               if "lower_quality" in self.tree.item(iid, "tags")]
+        if imported_duplicates:
+            self.tree.selection_set(imported_duplicates)
         if imported:
             try:
                 common_folder = Path(os.path.commonpath([str(Path(item["path"]).resolve().parent) for item in imported]))
@@ -1165,9 +1221,11 @@ class App:
             "TRCK": tr("Numer utworu"), "TDRC": tr("Rok"), "TCON": tr("Gatunek")
         }
         duplicate_types = {}
-        for item, kind, score, _lower_quality in self.results:
+        for item, kind, score, is_duplicate in self.results:
+            if not is_duplicate:
+                continue
             key = str(item["path"])
-            value = "TAK — identyczny" if kind.startswith("Identyczna zawartość audio") else "TAK — podobny"
+            value = "TAK — identyczny" if "identyczna zawartość audio" in kind.lower() else "TAK — podobny"
             if duplicate_types.get(key) != "TAK — identyczny":
                 duplicate_types[key] = value
         with open(dest, "w", newline="", encoding="utf-8-sig") as f:
