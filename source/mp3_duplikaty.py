@@ -200,9 +200,25 @@ def read_id3_tags(path):
         return {}
 
 
+def encoded_chromaprint(path, fpcalc):
+    """AcoustID expects the encoded fingerprint string, not fpcalc's -raw integer list."""
+    result = subprocess.run([fpcalc, "-length", "0", str(path)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        encoding="utf-8", errors="replace", timeout=120,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+    if result.returncode:
+        raise RuntimeError((result.stderr or "Nie udało się wygenerować odcisku Chromaprint.")[-300:])
+    for line in result.stdout.splitlines():
+        if line.startswith("FINGERPRINT="):
+            value = line.split("=", 1)[1].strip()
+            if value:
+                return value
+    raise RuntimeError("fpcalc nie zwrócił zakodowanego odcisku audio.")
+
+
 def acoustid_lookup(api_key, duration, fingerprint):
     query = urllib.parse.urlencode({"client": api_key, "duration": int(round(duration)),
-        "fingerprint": ",".join(str(v) for v in fingerprint), "meta": "recordings"})
+        "fingerprint": fingerprint, "meta": "recordings"})
     request = urllib.request.Request("https://api.acoustid.org/v2/lookup?" + query,
         headers={"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"})
     with urllib.request.urlopen(request, timeout=20) as response:
@@ -847,20 +863,25 @@ class App:
             f"Do sprawdzenia: {len(candidates)} plików. Zostaną uzupełnione wyłącznie puste tagi. "
             "Istniejące dane nie będą nadpisywane. Kontynuować?"):
             return
+        fpcalc = bundled_tool("fpcalc.exe") or bundled_tool("fpcalc")
+        if not fpcalc:
+            messagebox.showerror(APP_TITLE, "Nie znaleziono fpcalc.exe — wymagany jest Chromaprint.")
+            return
         self.tag_job_running = True
         self.scan_btn.configure(state="disabled")
         self.progress.configure(maximum=len(candidates), value=0)
         self.status.set(tr("Pobieranie danych muzycznych…"))
         threading.Thread(target=self._tag_completion_worker,
-                         args=(candidates, api_key.strip()), daemon=True).start()
+                         args=(candidates, api_key.strip(), fpcalc), daemon=True).start()
 
-    def _tag_completion_worker(self, candidates, api_key):
+    def _tag_completion_worker(self, candidates, api_key, fpcalc):
         updated = unmatched = errors = completed = 0
         total = len(candidates)
         for item in candidates:
             path = Path(item["path"])
             try:
-                duration, fingerprint = item["fp"]
+                duration, _raw_fingerprint = item["fp"]
+                fingerprint = encoded_chromaprint(path, fpcalc)
                 score, match = acoustid_lookup(api_key, duration, fingerprint)
                 if not match or score < 0.80 or not match.get("id"):
                     unmatched += 1
