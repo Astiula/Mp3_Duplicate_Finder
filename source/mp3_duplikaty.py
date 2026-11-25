@@ -97,7 +97,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.11"
+APP_VERSION = "1.5.12"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -1330,15 +1330,21 @@ class App:
         reusable = {}
         imported_results = []
         try:
+            # Fingerprint values contain many commas, so Sniffer(sample) can
+            # mistake those commas for the CSV column delimiter. Detect the
+            # delimiter from the header only (the exported header has no commas).
+            # Raise the standard 128 KiB field cap for long ID3/fingerprint fields.
+            csv.field_size_limit(100 * 1024 * 1024)
             with open(source, "r", newline="", encoding="utf-8-sig") as f:
-                sample = f.read(4096)
+                header = f.readline()
+                if not header:
+                    raise ValueError("Plik CSV jest pusty.")
+                delimiter_counts = {d: header.count(d) for d in (";", ",", "\\t")}
+                delimiter = max(delimiter_counts, key=delimiter_counts.get)
+                if delimiter_counts[delimiter] == 0:
+                    delimiter = ";"
                 f.seek(0)
-                try:
-                    dialect = csv.Sniffer().sniff(sample, delimiters=";,\\t")
-                except csv.Error:
-                    dialect = csv.excel
-                    dialect.delimiter = ";"
-                reader = csv.DictReader(f, dialect=dialect)
+                reader = csv.DictReader(f, delimiter=delimiter)
                 for row in reader:
                     raw_path = (row.get("_path") or "").strip()
                     if not raw_path:
