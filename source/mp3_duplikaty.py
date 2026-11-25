@@ -1339,7 +1339,7 @@ class App:
                 header = f.readline()
                 if not header:
                     raise ValueError("Plik CSV jest pusty.")
-                delimiter_counts = {d: header.count(d) for d in (";", ",", "\\t")}
+                delimiter_counts = {d: header.count(d) for d in (";", ",", "\t")}
                 delimiter = max(delimiter_counts, key=delimiter_counts.get)
                 if delimiter_counts[delimiter] == 0:
                     delimiter = ";"
