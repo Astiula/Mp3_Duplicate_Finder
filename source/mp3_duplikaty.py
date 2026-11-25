@@ -9,6 +9,9 @@ import shutil
 import csv
 import tempfile
 import ctypes
+import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 try:
@@ -16,7 +19,7 @@ try:
 except ImportError:
     winsound = None
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 
 APP_TITLE = "Mp3 Duplicate Finder"
 
@@ -66,6 +69,8 @@ TRANSLATIONS = {
     "Bitrate (kb/s)": "Bitrate (kb/s)",
     "Skanowanie zatrzymane przez użytkownika.": "Scan stopped by user.",
     "Nie można odczytać dźwięku": "Unable to decode audio",
+    "Uzupełnij tagi MP3 z internetu": "Complete MP3 tags from internet",
+    "Pobieranie danych muzycznych…": "Retrieving music metadata…",
     "Błąd fpcalc": "fpcalc error",
     "fpcalc nie zwrócił odcisku audio.": "fpcalc did not return an audio fingerprint.",
     "tytuł": "title", "Wyszukiwanie plików MP3…": "Searching for MP3 files…",
@@ -92,7 +97,7 @@ TRANSLATIONS = {
 def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
-APP_VERSION = "1.5.10"
+APP_VERSION = "1.5.11"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -195,6 +200,94 @@ def read_id3_tags(path):
         return {}
 
 
+def acoustid_lookup(api_key, duration, fingerprint):
+    query = urllib.parse.urlencode({"client": api_key, "duration": int(round(duration)),
+        "fingerprint": ",".join(str(v) for v in fingerprint), "meta": "recordings"})
+    request = urllib.request.Request("https://api.acoustid.org/v2/lookup?" + query,
+        headers={"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if payload.get("status") != "ok":
+        raise RuntimeError("AcoustID: " + str(payload.get("error", "błąd usługi")))
+    matches = [(float(result.get("score", 0)), recording)
+               for result in payload.get("results", [])
+               for recording in result.get("recordings", [])]
+    return max(matches, key=lambda x: x[0]) if matches else (0.0, None)
+
+
+def musicbrainz_recording(mbid):
+    url = f"https://musicbrainz.org/ws/2/recording/{urllib.parse.quote(mbid)}?inc=artists+releases+genres&fmt=json"
+    request = urllib.request.Request(url, headers={"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def fetch_cover_art(release_id):
+    if not release_id:
+        return None, None
+    request = urllib.request.Request(
+        f"https://coverartarchive.org/release/{urllib.parse.quote(release_id)}/front",
+        headers={"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"})
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            mime = response.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
+            data = response.read(8 * 1024 * 1024 + 1)
+        if len(data) > 8 * 1024 * 1024 or not mime.startswith("image/"):
+            return None, None
+        return data, mime
+    except Exception:
+        return None, None
+
+
+def metadata_from_recording(recording):
+    def artist_text(credit):
+        return "".join(part.get("name", part.get("artist", {}).get("name", ""))
+                       for part in credit if isinstance(part, dict))
+    releases = recording.get("releases", [])
+    release = releases[0] if releases else {}
+    track = ""
+    for medium in release.get("media", []):
+        for item in medium.get("tracks", []):
+            if item.get("recording", {}).get("id") == recording.get("id"):
+                track = item.get("number", "")
+                break
+        if track:
+            break
+    genres = recording.get("genres", [])
+    return {"title": recording.get("title", ""),
+            "artist": artist_text(recording.get("artist-credit", [])),
+            "album": release.get("title", ""), "track": track,
+            "date": (release.get("date", "") or "")[:4],
+            "genre": genres[0].get("name", "") if genres else "",
+            "release_id": release.get("id", "")}
+
+
+def fill_missing_id3_tags(path, metadata, cover_data=None, cover_mime=None):
+    from mutagen.mp3 import MP3
+    from mutagen.id3 import ID3, TIT2, TPE1, TALB, TRCK, TDRC, TCON, APIC
+    audio = MP3(path)
+    if audio.tags is None:
+        audio.add_tags()
+    tags = audio.tags
+    frame_map = {
+        "TIT2": ("title", TIT2), "TPE1": ("artist", TPE1),
+        "TALB": ("album", TALB), "TRCK": ("track", TRCK),
+        "TDRC": ("date", TDRC), "TCON": ("genre", TCON)}
+    changed = []
+    for key, (field, frame_type) in frame_map.items():
+        value = metadata.get(field)
+        if value and not tags.getall(key):
+            tags.add(frame_type(encoding=3, text=value))
+            changed.append(key)
+    if cover_data and not tags.getall("APIC"):
+        tags.add(APIC(encoding=3, mime=cover_mime or "image/jpeg",
+                      type=3, desc="Cover", data=cover_data))
+        changed.append("APIC")
+    if changed:
+        audio.save()
+    return changed
+
+
 def read_mp3_quality(path):
     try:
         from mutagen.mp3 import MP3
@@ -285,6 +378,11 @@ class App:
         self.playback_stop_event = threading.Event()
         self.playback_process = None
         self.playback_lock = threading.Lock()
+        self.tag_job_running = False
+        try:
+            self.acoustid_api_key = json.loads(settings_path().read_text(encoding="utf-8")).get("acoustid_api_key", "")
+        except Exception:
+            self.acoustid_api_key = ""
         self.design = UI_DESIGN
         self.theme_name = "dark" if self.design == "dark_pro" else self.load_theme()
         self.last_folder = self.load_last_folder()
@@ -310,7 +408,15 @@ class App:
         try:
             path = settings_path()
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(json.dumps({"theme": self.theme_name, "last_folder": self.folder.get().strip()}), encoding="utf-8")
+            current = {}
+            try:
+                current = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+            current.update({"theme": self.theme_name, "last_folder": self.folder.get().strip()})
+            if getattr(self, "acoustid_api_key", ""):
+                current["acoustid_api_key"] = self.acoustid_api_key
+            path.write_text(json.dumps(current, ensure_ascii=False), encoding="utf-8")
         except Exception:
             pass
 
@@ -398,6 +504,10 @@ class App:
                    style="Folder.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(5, 2))
         ttk.Button(export, text="📄  " + tr("Eksportuj CSV"), command=self.export_csv,
                    style="Export.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(2, 0))
+
+        ttk.Button(export, text="🏷  " + tr("Uzupełnij tagi MP3 z internetu"),
+                   command=self.start_tag_completion,
+                   style="Folder.TButton" if self.design == "glassy_modern" else "RibbonSmall.TButton").pack(fill="x", expand=True, pady=(4, 0))
 
         # Group 4 — preview and navigation.
         audio = ttk.Frame(ribbon, style="RibbonGroup.TFrame", padding=(9, 4))
@@ -708,6 +818,72 @@ class App:
             self.folder.set(path)
             self.save_settings()
 
+    def start_tag_completion(self):
+        if self.tag_job_running or self.is_scanning:
+            messagebox.showinfo(APP_TITLE, "Poczekaj na zakończenie bieżącej operacji.")
+            return
+        if not self.scanned_items:
+            messagebox.showinfo(APP_TITLE, "Najpierw przeskanuj katalog MP3.")
+            return
+        api_key = self.acoustid_api_key.strip()
+        if not api_key:
+            messagebox.showinfo(APP_TITLE,
+                "Wymagany jest bezpłatny klucz AcoustID. Utwórz go na https://acoustid.org/new-application.")
+            api_key = simpledialog.askstring(APP_TITLE, "Wklej klucz API AcoustID:", parent=self.root)
+            if not api_key or not api_key.strip():
+                return
+            self.acoustid_api_key = api_key.strip()
+            self.save_settings()
+        selected = {self.tree.item(i, "values")[4] for i in self.tree.selection()
+                    if len(self.tree.item(i, "values")) > 4}
+        candidates = [item for item in self.scanned_items
+            if (not selected or str(item["path"]) in selected)
+            and item.get("fp") and Path(item["path"]).is_file()
+            and any(not item.get("tags", {}).get(k) for k in ("TIT2","TPE1","TALB","TRCK","TDRC","TCON"))]
+        if not candidates:
+            messagebox.showinfo(APP_TITLE, "Nie znaleziono plików z brakującymi tagami.")
+            return
+        if not messagebox.askyesno(APP_TITLE,
+            f"Do sprawdzenia: {len(candidates)} plików. Zostaną uzupełnione wyłącznie puste tagi. "
+            "Istniejące dane nie będą nadpisywane. Kontynuować?"):
+            return
+        self.tag_job_running = True
+        self.scan_btn.configure(state="disabled")
+        self.progress.configure(maximum=len(candidates), value=0)
+        self.status.set(tr("Pobieranie danych muzycznych…"))
+        threading.Thread(target=self._tag_completion_worker,
+                         args=(candidates, api_key.strip()), daemon=True).start()
+
+    def _tag_completion_worker(self, candidates, api_key):
+        updated = unmatched = errors = completed = 0
+        total = len(candidates)
+        for item in candidates:
+            path = Path(item["path"])
+            try:
+                duration, fingerprint = item["fp"]
+                score, match = acoustid_lookup(api_key, duration, fingerprint)
+                if not match or score < 0.80 or not match.get("id"):
+                    unmatched += 1
+                else:
+                    metadata = metadata_from_recording(musicbrainz_recording(match["id"]))
+                    if not metadata.get("title") or not metadata.get("artist"):
+                        unmatched += 1
+                    else:
+                        cover, mime = fetch_cover_art(metadata.get("release_id"))
+                        changed = fill_missing_id3_tags(path, metadata, cover, mime)
+                        if changed:
+                            updated += 1
+                            item["tags"] = read_id3_tags(path)
+                        else:
+                            unmatched += 1
+                    time.sleep(1.1)  # MusicBrainz public API rate limit
+            except Exception as exc:
+                errors += 1
+                self.events.put(("status", f"Błąd tagów {path.name}: {exc}"))
+            completed += 1
+            self.events.put(("tags_progress", completed, total, updated))
+        self.events.put(("tags_done", updated, unmatched, errors, total))
+
     def stop_scan(self):
         if self.is_scanning:
             self.cancel_event.set()
@@ -905,6 +1081,19 @@ class App:
                     self.play_btn.configure(state="normal")
                     self.stop_play_btn.configure(state="disabled")
                     self.status.set(msg[1])
+                elif msg[0] == "tags_progress":
+                    _, current, total, updated = msg
+                    self.progress.configure(maximum=max(total, 1), value=current)
+                    self.status.set(f"Rozpoznawanie tagów: {current}/{total} · uzupełniono {updated}")
+                elif msg[0] == "tags_done":
+                    _, updated, unmatched, errors, total = msg
+                    self.tag_job_running = False
+                    self.scan_btn.configure(state="normal")
+                    self.progress.configure(value=0)
+                    self.status.set(f"Uzupełnianie tagów zakończone: {updated} plików.")
+                    messagebox.showinfo(APP_TITLE,
+                        f"Sprawdzono: {total}\\nUzupełniono: {updated}\\n"
+                        f"Brak pewnego dopasowania / bez zmian: {unmatched}\\nBłędy: {errors}")
                 elif msg[0] == "done":
                     _, rows, inventory, total, ok, error, cancelled = msg
                     self.progress.configure(value=0)
