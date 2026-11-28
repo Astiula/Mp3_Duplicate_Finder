@@ -98,6 +98,8 @@ def tr(value):
     return TRANSLATIONS.get(value, value) if LANGUAGE == "en" else value
 
 APP_VERSION = "1.5.12"
+# Domyślny klucz aplikacji AcoustID przekazany przez użytkownika.
+ACOUSTID_API_KEY = "uHnyVP2ok3"
 UI_DESIGN = "glassy_modern"
 AUTHOR = "Konrad Astachow (Kondar)"
 COPYRIGHT = "© 2026 Konrad Astachow (Kondar). Wszelkie prawa zastrzeżone."
@@ -396,9 +398,9 @@ class App:
         self.playback_lock = threading.Lock()
         self.tag_job_running = False
         try:
-            self.acoustid_api_key = json.loads(settings_path().read_text(encoding="utf-8")).get("acoustid_api_key", "")
+            self.acoustid_api_key = (json.loads(settings_path().read_text(encoding="utf-8")).get("acoustid_api_key", "") or ACOUSTID_API_KEY)
         except Exception:
-            self.acoustid_api_key = ""
+            self.acoustid_api_key = ACOUSTID_API_KEY
         self.design = UI_DESIGN
         self.theme_name = "dark" if self.design == "dark_pro" else self.load_theme()
         self.last_folder = self.load_last_folder()
