@@ -12,6 +12,7 @@ import ctypes
 import time
 import urllib.parse
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 try:
@@ -219,12 +220,31 @@ def encoded_chromaprint(path, fpcalc):
 
 
 def acoustid_lookup(api_key, duration, fingerprint):
-    query = urllib.parse.urlencode({"client": api_key, "duration": int(round(duration)),
-        "fingerprint": fingerprint, "meta": "recordings"})
-    request = urllib.request.Request("https://api.acoustid.org/v2/lookup?" + query,
-        headers={"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        payload = json.loads(response.read().decode("utf-8"))
+    # Fingerprints can be very long. POST avoids URL-length limits and is the
+    # documented form-friendly way to submit the lookup parameters.
+    form_data = urllib.parse.urlencode({
+        "client": api_key,
+        "duration": int(round(duration)),
+        "fingerprint": fingerprint,
+        "meta": "recordings"
+    }).encode("utf-8")
+    request = urllib.request.Request(
+        "https://api.acoustid.org/v2/lookup",
+        data=form_data,
+        headers={
+            "User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)",
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
+        method="POST"
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        body = exc.read(1000).decode("utf-8", "replace").strip()
+        raise RuntimeError(
+            f"AcoustID HTTP {exc.code}: {body or exc.reason}"
+        ) from exc
     if payload.get("status") != "ok":
         raise RuntimeError("AcoustID: " + str(payload.get("error", "błąd usługi")))
     matches = [(float(result.get("score", 0)), recording)
@@ -233,11 +253,40 @@ def acoustid_lookup(api_key, duration, fingerprint):
     return max(matches, key=lambda x: x[0]) if matches else (0.0, None)
 
 
+_musicbrainz_lock = threading.Lock()
+_musicbrainz_last_request = 0.0
+
+
 def musicbrainz_recording(mbid):
+    global _musicbrainz_last_request
     url = f"https://musicbrainz.org/ws/2/recording/{urllib.parse.quote(mbid)}?inc=artists+releases+genres&fmt=json"
-    request = urllib.request.Request(url, headers={"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        return json.loads(response.read().decode("utf-8"))
+    headers = {"User-Agent": f"{APP_TITLE}/{APP_VERSION} (kondar@int.pl)"}
+
+    # MusicBrainz asks clients to stay at or below one request per second.
+    # Serialize requests and retry temporary 503/429 responses.
+    for attempt in range(4):
+        with _musicbrainz_lock:
+            wait = 1.1 - (time.monotonic() - _musicbrainz_last_request)
+            if wait > 0:
+                time.sleep(wait)
+            _musicbrainz_last_request = time.monotonic()
+            request = urllib.request.Request(url, headers=headers)
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                if exc.code not in (429, 503) or attempt == 3:
+                    body = exc.read(1000).decode("utf-8", "replace").strip()
+                    raise RuntimeError(
+                        f"MusicBrainz HTTP {exc.code}: {body or exc.reason}"
+                    ) from exc
+                retry_after = exc.headers.get("Retry-After", "")
+                try:
+                    delay = max(float(retry_after), 1.1)
+                except (TypeError, ValueError):
+                    delay = 2 ** (attempt + 1)
+        time.sleep(min(delay, 30))
+    raise RuntimeError("MusicBrainz: przekroczono limit ponowień.")
 
 
 def fetch_cover_art(release_id):
@@ -905,7 +954,6 @@ class App:
                             item["tags"] = read_id3_tags(path)
                         else:
                             unmatched += 1
-                    time.sleep(1.1)  # MusicBrainz public API rate limit
             except Exception as exc:
                 detail = f"{path.name} — etap: {stage} — {type(exc).__name__}: {exc}"
                 error_details.append(detail)
