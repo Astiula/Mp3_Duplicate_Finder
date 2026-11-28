@@ -19,6 +19,11 @@ Artefakt: `app/build/outputs/apk/debug/app-debug.apk`.
 - Eksport CSV przez systemowy selektor miejsca zapisu.
 - Pole klucza AcoustID zapisywane lokalnie w prywatnych preferencjach; klucz nie jest osadzony w APK.
 
+## Android Auto
+- Aplikacja rejestruje usługę Media3 `MediaLibraryService` dla Android Auto.
+- Po wybraniu folderu muzycznego w aplikacji, Android Auto może przeglądać pliki MP3 z tego folderu i odtwarzać je z metadanymi tytułu, wykonawcy i albumu.
+- Pierwsze uruchomienie wymaga przyznania dostępu do folderu w aplikacji na telefonie. Android Auto służy do przeglądania i odtwarzania muzyki; funkcje porządkowania biblioteki pozostają w interfejsie telefonu.
+
 ## Różnice względem Windows 1.5.12
 To jest pierwszy działający etap Androida, a nie pełny odpowiednik Windows. SHA-256 wykrywa tylko identyczne pliki, nie wykrywa utworów ponownie zakodowanych ani podobieństwa akustycznego.
 
