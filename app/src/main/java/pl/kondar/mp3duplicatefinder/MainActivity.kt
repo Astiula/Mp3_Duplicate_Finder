@@ -293,9 +293,8 @@ private suspend fun scanFolder(
 
 
 private fun renameDocumentToTitle(file: DocumentFile, title: String): DocumentFile? {
-    val safe = title
-        .replace(Regex("[\\\\/:*?\\\"<>|\\\\u0000-\\\\u001F]"), "")
-        .replace(Regex("\\s+"), " ")
+    val safe = title.filter { it.code >= 32 && it !in "<>:\"/\\\\|?*" }
+        .split(Regex("\\\\s+")).joinToString(" ")
         .trim().trimEnd('.', ' ')
         .take(180).trimEnd('.', ' ')
     if (safe.isBlank() || safe == "." || safe == "..") return null
