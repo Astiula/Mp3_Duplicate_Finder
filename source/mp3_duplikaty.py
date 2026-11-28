@@ -362,22 +362,17 @@ def rename_mp3_to_title(path, title):
     title = str(title or "").strip()
     if not title:
         return path
-    # Windows filename rules; also remove control characters and trailing dots/spaces.
-    safe = re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', "", title)
-    safe = re.sub(r"\\s+", " ", safe).strip(" .")
+    # Remove characters forbidden by Windows and collapse whitespace.
+    safe = "".join(ch for ch in title if ch not in '<>:"/\\|?*' and ord(ch) >= 32)
+    safe = " ".join(safe.split()).strip(" .")[:180].rstrip(" .")
     if not safe or safe in {".", ".."}:
         return path
-    safe = safe[:180].rstrip(" .")
     if safe.casefold() == path.stem.casefold():
         return path
     candidate = path.with_name(safe + path.suffix)
     if candidate.exists() and candidate.resolve() != path.resolve():
-        artist = ""
-        try:
-            artist = str((read_id3_tags(path).get("TPE1") or "")).strip()
-        except Exception:
-            pass
-        artist_safe = re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', "", artist).strip(" .")[:60]
+        artist = str((read_id3_tags(path).get("TPE1") or "")).strip()
+        artist_safe = "".join(ch for ch in artist if ch not in '<>:"/\\|?*' and ord(ch) >= 32).strip(" .")[:60]
         if artist_safe:
             candidate = path.with_name(f"{safe} - {artist_safe}{path.suffix}")
         base = candidate.stem
