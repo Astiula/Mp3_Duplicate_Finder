@@ -11,6 +11,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaLibraryService
+import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 
@@ -58,14 +59,14 @@ class AutoMediaLibraryService : MediaLibraryService() {
                 page: Int,
                 pageSize: Int,
                 params: LibraryParams?
-            ): ListenableFuture<LibraryResult<List<MediaItem>>> {
+            ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> {
                 if (parentId != ROOT_ID) {
-                    return Futures.immediateFuture(LibraryResult.ofItemList(emptyList(), params))
+                    return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.of(), params))
                 }
                 val items = loadTracks()
                 val from = (page * pageSize).coerceAtMost(items.size)
                 val to = (from + pageSize).coerceAtMost(items.size)
-                return Futures.immediateFuture(LibraryResult.ofItemList(items.subList(from, to), params))
+                return Futures.immediateFuture(LibraryResult.ofItemList(ImmutableList.copyOf(items.subList(from, to)), params))
             }
 
             override fun onGetItem(
