@@ -355,6 +355,42 @@ def fill_missing_id3_tags(path, metadata, cover_data=None, cover_mime=None):
     return changed
 
 
+
+def rename_mp3_to_title(path, title):
+    """Rename an MP3 to its ID3 title without overwriting an existing file."""
+    path = Path(path)
+    title = str(title or "").strip()
+    if not title:
+        return path
+    # Windows filename rules; also remove control characters and trailing dots/spaces.
+    safe = re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', "", title)
+    safe = re.sub(r"\\s+", " ", safe).strip(" .")
+    if not safe or safe in {".", ".."}:
+        return path
+    safe = safe[:180].rstrip(" .")
+    if safe.casefold() == path.stem.casefold():
+        return path
+    candidate = path.with_name(safe + path.suffix)
+    if candidate.exists() and candidate.resolve() != path.resolve():
+        artist = ""
+        try:
+            artist = str((read_id3_tags(path).get("TPE1") or "")).strip()
+        except Exception:
+            pass
+        artist_safe = re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', "", artist).strip(" .")[:60]
+        if artist_safe:
+            candidate = path.with_name(f"{safe} - {artist_safe}{path.suffix}")
+        base = candidate.stem
+        number = 2
+        while candidate.exists() and candidate.resolve() != path.resolve():
+            candidate = path.with_name(f"{base} ({number}){path.suffix}")
+            number += 1
+    if candidate.resolve() == path.resolve():
+        return path
+    path.rename(candidate)
+    return candidate
+
+
 def read_mp3_quality(path):
     try:
         from mutagen.mp3 import MP3
@@ -949,6 +985,14 @@ class App:
                         cover, mime = fetch_cover_art(metadata.get("release_id"))
                         stage = "zapis tagów ID3"
                         changed = fill_missing_id3_tags(path, metadata, cover, mime)
+                        # Rename from the authoritative MusicBrainz track title.
+                        # Never overwrite an existing file; collisions get a numbered suffix.
+                        new_path = rename_mp3_to_title(path, metadata.get("title", ""))
+                        if new_path != path:
+                            old_path = str(path)
+                            path = new_path
+                            item["path"] = str(new_path)
+                            self.events.put(("file_renamed", old_path, str(new_path)))
                         if changed:
                             updated += 1
                             item["tags"] = read_id3_tags(path)
@@ -1159,6 +1203,14 @@ class App:
                     self.play_btn.configure(state="normal")
                     self.stop_play_btn.configure(state="disabled")
                     self.status.set(msg[1])
+                elif msg[0] == "file_renamed":
+                    _, old_path, new_path = msg
+                    for iid in self.tree.get_children():
+                        values = list(self.tree.item(iid, "values"))
+                        if len(values) > 4 and values[4] == old_path:
+                            values[4] = new_path
+                            self.tree.item(iid, values=values)
+                    self.status.set(f"Zmieniono nazwę pliku: {Path(new_path).name}")
                 elif msg[0] == "tags_progress":
                     _, current, total, updated = msg
                     self.progress.configure(maximum=max(total, 1), value=current)
