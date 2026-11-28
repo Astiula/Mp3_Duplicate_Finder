@@ -123,12 +123,26 @@ private fun FinderApp(context: Context) {
                             OutlinedButton(enabled = folderUri != null && !scanning, onClick = {
                                 val uri = folderUri ?: return@OutlinedButton
                                 scanning = true; progress = 0f; status = "Przygotowywanie skanowania…"
+                                tracks = emptyList()
+                                selected = emptySet()
                                 scope.launch {
-                                    val result = scanFolder(context, uri) { p, message -> progress = p; status = message }
-                                    tracks = result
-                                    selected = result.filter { it.duplicate && !it.original }.map { it.uri.toString() }.toSet()
-                                    scanning = false
-                                    status = "Zakończono. Przeskanowano " + result.size + " plików."
+                                    try {
+                                        val result = scanFolder(context, uri) { p, message, scannedTrack ->
+                                            progress = p
+                                            status = message
+                                            if (scannedTrack != null) {
+                                                // Add each completed file immediately; duplicate labels are finalized after the scan.
+                                                tracks = tracks + scannedTrack
+                                            }
+                                        }
+                                        tracks = result
+                                        selected = result.filter { it.duplicate && !it.original }.map { it.uri.toString() }.toSet()
+                                        status = "Zakończono. Przeskanowano " + result.size + " plików."
+                                    } catch (e: Exception) {
+                                        status = "Błąd skanowania: " + (e.message ?: "nieznany błąd")
+                                    } finally {
+                                        scanning = false
+                                    }
                                 }
                             }, modifier = Modifier.weight(1f)) {
                                 Icon(Icons.Rounded.Search, null); Spacer(Modifier.width(5.dp)); Text(if (scanning) "Skanuję…" else "Skanuj")
@@ -215,7 +229,11 @@ private fun TrackRow(track: Track, checked: Boolean, panel: Color, fg: Color, mu
     }
 }
 
-private suspend fun scanFolder(context: Context, treeUri: Uri, onProgress: (Float, String) -> Unit): List<Track> = withContext(Dispatchers.IO) {
+private suspend fun scanFolder(
+    context: Context,
+    treeUri: Uri,
+    onProgress: (Float, String, Track?) -> Unit
+): List<Track> = withContext(Dispatchers.IO) {
     val root = DocumentFile.fromTreeUri(context, treeUri) ?: return@withContext emptyList()
     val files = mutableListOf<Pair<DocumentFile, String>>()
     fun walk(dir: DocumentFile, parent: String) {
@@ -229,19 +247,26 @@ private suspend fun scanFolder(context: Context, treeUri: Uri, onProgress: (Floa
     val raw = mutableListOf<Track>()
     files.forEachIndexed { index, pair ->
         val file = pair.first
-        onProgress((index + 1f) / files.size.coerceAtLeast(1), "Analizuję " + (index + 1) + "/" + files.size + ": " + file.name)
+        val message = "Analizuję " + (index + 1) + "/" + files.size + ": " + file.name
         val hash = runCatching { sha256(context, file.uri) }.getOrDefault("")
         val retriever = MediaMetadataRetriever()
         val track = runCatching {
             retriever.setDataSource(context, file.uri)
-            Track(file.uri, file.name.orEmpty(), pair.second, file.length(),
+            Track(
+                file.uri, file.name.orEmpty(), pair.second, file.length(),
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST).orEmpty(),
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE).orEmpty(),
                 retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM).orEmpty(),
-                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() ?: 0L, hash)
+                retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toLongOrNull() ?: 0L,
+                hash
+            )
         }.getOrNull()
         runCatching { retriever.release() }
         if (track != null) raw += track
+        // Publish progress and the newly scanned file on the UI thread, not after the whole folder finishes.
+        withContext(kotlinx.coroutines.Dispatchers.Main) {
+            onProgress((index + 1f) / files.size.coerceAtLeast(1), message, track)
+        }
     }
     val groups = raw.filter { it.sha256.isNotBlank() }.groupBy { it.sha256 }.filterValues { it.size > 1 }
     val marks = mutableMapOf<String, Pair<Boolean, Boolean>>()
@@ -249,9 +274,9 @@ private suspend fun scanFolder(context: Context, treeUri: Uri, onProgress: (Floa
         val original = group.maxWithOrNull(compareBy<Track> { it.bitrate }.thenBy { it.size }.thenBy { it.path })!!
         group.forEach { marks[it.uri.toString()] = (it.uri == original.uri) to true }
     }
-    raw.map { t ->
-        val mark = marks[t.uri.toString()]
-        if (mark == null) t else t.copy(original = mark.first, duplicate = true)
+    raw.map { track ->
+        val mark = marks[track.uri.toString()]
+        if (mark == null) track else track.copy(original = mark.first, duplicate = true)
     }
 }
 
