@@ -1,4 +1,5 @@
 name: Build Android APK
+# Build includes Android Auto Media3 service and library callbacks.
 on:
   push:
     branches: [android-app]
