@@ -1122,23 +1122,23 @@ class App:
                     self.progress.configure(value=0)
                     self.status.set(f"Uzupełnianie tagów zakończone: {updated} plików.")
                     summary = (
-                        f"Sprawdzono: {total}\\n"
-                        f"Uzupełniono: {updated}\\n"
-                        f"Brak pewnego dopasowania / bez zmian: {unmatched}\\n"
+                        f"Sprawdzono: {total}\n"
+                        f"Uzupełniono: {updated}\n"
+                        f"Brak pewnego dopasowania / bez zmian: {unmatched}\n"
                         f"Błędy: {errors}"
                     )
                     if error_details:
                         log_path = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Mp3DuplicateFinder" / "tag_errors.log"
                         try:
                             log_path.parent.mkdir(parents=True, exist_ok=True)
-                            log_path.write_text("\\n".join(error_details), encoding="utf-8")
-                            log_note = f"\\n\\nSzczegóły zapisano także w pliku:\\n{log_path}"
+                            log_path.write_text("\n".join(error_details), encoding="utf-8")
+                            log_note = f"\n\nSzczegóły zapisano także w pliku:\n{log_path}"
                         except OSError:
                             log_note = ""
-                        details = "\\n".join(f"• {line}" for line in error_details[:8])
+                        details = "\n".join(f"• {line}" for line in error_details[:8])
                         if len(error_details) > 8:
-                            details += f"\\n… oraz {len(error_details) - 8} kolejnych błędów."
-                        messagebox.showwarning(APP_TITLE, summary + "\\n\\nSzczegóły błędów:\\n" + details + log_note)
+                            details += f"\n… oraz {len(error_details) - 8} kolejnych błędów."
+                        messagebox.showwarning(APP_TITLE, summary + "\n\nSzczegóły błędów:\n" + details + log_note)
                     else:
                         messagebox.showinfo(APP_TITLE, summary)
                 elif msg[0] == "done":
