@@ -1157,25 +1157,32 @@ class App:
                     self.scanned_items = inventory
                     self.cache_items = {str(Path(item["path"]).resolve()): item for item in inventory
                                         if item.get("hash") and item.get("fp")}
-                    seen = set()
-                    for item, kind, score, lower_quality in rows:
-                        key = (str(item["path"]), kind, score)
-                        if key in seen:
-                            continue
-                        seen.add(key)
+                    # Show every scanned MP3, including files without any duplicate.
+                    result_by_path = {}
+                    for result_item, kind, score, lower_quality in rows:
+                        result_by_path[str(result_item["path"])] = (kind, score, lower_quality)
+                    self.tree.delete(*self.tree.get_children())
+                    for item in sorted(inventory, key=lambda x: str(x["path"]).casefold()):
+                        path_text = str(item["path"])
+                        result = result_by_path.get(path_text)
+                        if result:
+                            kind, score, lower_quality = result
+                        else:
+                            kind, score, lower_quality = "BRAK DUPLIKATÓW", "—", False
                         self.tree.insert("", "end", values=(kind, score, quality_label(item),
-                            f'{item["size"] / 1024 / 1024:.1f} MB', str(item["path"])),
+                            f'{item["size"] / 1024 / 1024:.1f} MB', path_text),
                             tags=("lower_quality",) if lower_quality else ())
                     auto_select = [iid for iid in self.tree.get_children()
                                    if "lower_quality" in self.tree.item(iid, "tags")]
                     if auto_select:
                         self.tree.selection_set(auto_select)
                     selected_files = len({self.tree.item(iid, "values")[4] for iid in auto_select})
-                    self.count_label.configure(text=f"{len(seen)} wyników · zaznaczono {selected_files} plików z duplikatami")
+                    duplicate_files = len(result_by_path)
+                    self.count_label.configure(text=f"{len(inventory)} plików · {duplicate_files} w grupach duplikatów · zaznaczono {selected_files}")
                     if self.design == "dashboard":
                         self.dashboard_status.set("ZATRZYMANO" if cancelled else "ZAKOŃCZONO")
-                        self.dashboard_results.set(str(len(seen)))
-                    found_files = len({str(item["path"]) for item, _, _, _ in rows})
+                        self.dashboard_results.set(str(len(inventory)))
+                    found_files = len(inventory)
                     self.scan_counts.set(f"Znalezione pliki: {found_files}  |  Przeskanowane: {ok}/{total}")
                     self.status.set(tr("Skanowanie zatrzymane. Wyświetlono dotychczasowe wyniki.") if cancelled else tr("Zakończono. Sprawdź wyniki przed przenoszeniem."))
                     if not seen and not cancelled:
@@ -1418,8 +1425,16 @@ class App:
         self.scanned_items = imported
         self.results = imported_results
         self.tree.delete(*self.tree.get_children())
+        imported_result_by_path = {}
         for item, kind, score, lower_quality in self.results:
+            imported_result_by_path[str(item["path"])] = (kind, score, lower_quality)
+        for item in sorted(imported, key=lambda x: str(x["path"]).casefold()):
             path = Path(item["path"])
+            result = imported_result_by_path.get(str(path))
+            if result:
+                kind, score, lower_quality = result
+            else:
+                kind, score, lower_quality = "BRAK DUPLIKATÓW", "—", False
             self.tree.insert("", "end", values=(kind, score, quality_label(item),
                 f'{item.get("size", 0) / 1024 / 1024:.1f} MB', str(path)),
                 tags=("lower_quality",) if lower_quality else ())
@@ -1435,7 +1450,7 @@ class App:
                     self.save_settings()
             except (ValueError, OSError):
                 pass
-        self.count_label.configure(text=f"Wczytano bazę: {len(imported)} plików · duplikaty: {len(self.results)}")
+        self.count_label.configure(text=f"Wczytano bazę: {len(imported)} plików · w grupach duplikatów: {len(imported_result_by_path)}")
         valid_paths = sum(1 for item in imported if item["path"].is_file())
         self.scan_counts.set(f"Baza CSV: {len(imported)}  |  Pliki dostępne: {valid_paths}")
         old_format = len(reusable) == 0
