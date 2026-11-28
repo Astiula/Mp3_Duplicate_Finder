@@ -250,7 +250,7 @@ private suspend fun scanFolder(
         val message = "Analizuję " + (index + 1) + "/" + files.size + ": " + file.name
         val hash = runCatching { sha256(context, file.uri) }.getOrDefault("")
         val retriever = MediaMetadataRetriever()
-        val track = runCatching {
+        var track = runCatching {
             retriever.setDataSource(context, file.uri)
             Track(
                 file.uri, file.name.orEmpty(), pair.second, file.length(),
@@ -262,6 +262,17 @@ private suspend fun scanFolder(
             )
         }.getOrNull()
         runCatching { retriever.release() }
+        // Rename from the embedded ID3 title during the scan. Use a collision-safe
+        // suffix and retain the original file if the storage provider rejects rename.
+        if (track != null && track.title.isNotBlank()) {
+            val renamed = renameDocumentToTitle(file, track.title)
+            if (renamed != null) {
+                val newName = renamed.name ?: file.name.orEmpty()
+                val parentPath = pair.second.substringBeforeLast('/', "")
+                val newRelativePath = if (parentPath.isBlank()) newName else "$parentPath/$newName"
+                track = track.copy(uri = renamed.uri, name = newName, path = newRelativePath)
+            }
+        }
         if (track != null) raw += track
         // Publish progress and the newly scanned file on the UI thread, not after the whole folder finishes.
         withContext(kotlinx.coroutines.Dispatchers.Main) {
@@ -278,6 +289,31 @@ private suspend fun scanFolder(
         val mark = marks[track.uri.toString()]
         if (mark == null) track else track.copy(original = mark.first, duplicate = true)
     }
+}
+
+
+private fun renameDocumentToTitle(file: DocumentFile, title: String): DocumentFile? {
+    val safe = title
+        .replace(Regex("[\\\\/:*?\\\"<>|\\\\u0000-\\\\u001F]"), "")
+        .replace(Regex("\\s+"), " ")
+        .trim().trimEnd('.', ' ')
+        .take(180).trimEnd('.', ' ')
+    if (safe.isBlank() || safe == "." || safe == "..") return null
+
+    val oldName = file.name ?: return null
+    val extension = oldName.substringAfterLast('.', "").let { if (it.isNotBlank()) ".$it" else "" }
+    val oldStem = oldName.removeSuffix(extension)
+    if (safe.equals(oldStem, ignoreCase = true)) return null
+
+    val parent = file.parentFile ?: return null
+    var candidate = safe + extension
+    var index = 2
+    while (parent.findFile(candidate) != null && candidate != oldName) {
+        candidate = "$safe ($index)$extension"
+        index++
+    }
+    if (candidate == oldName || !file.renameTo(candidate)) return null
+    return parent.findFile(candidate)
 }
 
 private fun sha256(context: Context, uri: Uri): String {
