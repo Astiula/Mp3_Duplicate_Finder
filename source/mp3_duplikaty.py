@@ -877,22 +877,28 @@ class App:
                          args=(candidates, api_key.strip(), fpcalc), daemon=True).start()
 
     def _tag_completion_worker(self, candidates, api_key, fpcalc):
-        updated = unmatched = errors = completed = 0
+        updated = unmatched = completed = 0
+        error_details = []
         total = len(candidates)
         for item in candidates:
             path = Path(item["path"])
+            stage = "generowanie fingerprintu"
             try:
                 duration, _raw_fingerprint = item["fp"]
                 fingerprint = encoded_chromaprint(path, fpcalc)
+                stage = "zapytanie do AcoustID"
                 score, match = acoustid_lookup(api_key, duration, fingerprint)
                 if not match or score < 0.80 or not match.get("id"):
                     unmatched += 1
                 else:
+                    stage = "pobieranie danych z MusicBrainz"
                     metadata = metadata_from_recording(musicbrainz_recording(match["id"]))
                     if not metadata.get("title") or not metadata.get("artist"):
                         unmatched += 1
                     else:
+                        stage = "pobieranie okładki"
                         cover, mime = fetch_cover_art(metadata.get("release_id"))
+                        stage = "zapis tagów ID3"
                         changed = fill_missing_id3_tags(path, metadata, cover, mime)
                         if changed:
                             updated += 1
@@ -901,11 +907,12 @@ class App:
                             unmatched += 1
                     time.sleep(1.1)  # MusicBrainz public API rate limit
             except Exception as exc:
-                errors += 1
-                self.events.put(("status", f"Błąd tagów {path.name}: {exc}"))
+                detail = f"{path.name} — etap: {stage} — {type(exc).__name__}: {exc}"
+                error_details.append(detail)
+                self.events.put(("status", f"Błąd tagów: {detail}"))
             completed += 1
             self.events.put(("tags_progress", completed, total, updated))
-        self.events.put(("tags_done", updated, unmatched, errors, total))
+        self.events.put(("tags_done", updated, unmatched, len(error_details), total, error_details))
 
     def stop_scan(self):
         if self.is_scanning:
@@ -1109,14 +1116,31 @@ class App:
                     self.progress.configure(maximum=max(total, 1), value=current)
                     self.status.set(f"Rozpoznawanie tagów: {current}/{total} · uzupełniono {updated}")
                 elif msg[0] == "tags_done":
-                    _, updated, unmatched, errors, total = msg
+                    _, updated, unmatched, errors, total, error_details = msg
                     self.tag_job_running = False
                     self.scan_btn.configure(state="normal")
                     self.progress.configure(value=0)
                     self.status.set(f"Uzupełnianie tagów zakończone: {updated} plików.")
-                    messagebox.showinfo(APP_TITLE,
-                        f"Sprawdzono: {total}\\nUzupełniono: {updated}\\n"
-                        f"Brak pewnego dopasowania / bez zmian: {unmatched}\\nBłędy: {errors}")
+                    summary = (
+                        f"Sprawdzono: {total}\\n"
+                        f"Uzupełniono: {updated}\\n"
+                        f"Brak pewnego dopasowania / bez zmian: {unmatched}\\n"
+                        f"Błędy: {errors}"
+                    )
+                    if error_details:
+                        log_path = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Mp3DuplicateFinder" / "tag_errors.log"
+                        try:
+                            log_path.parent.mkdir(parents=True, exist_ok=True)
+                            log_path.write_text("\\n".join(error_details), encoding="utf-8")
+                            log_note = f"\\n\\nSzczegóły zapisano także w pliku:\\n{log_path}"
+                        except OSError:
+                            log_note = ""
+                        details = "\\n".join(f"• {line}" for line in error_details[:8])
+                        if len(error_details) > 8:
+                            details += f"\\n… oraz {len(error_details) - 8} kolejnych błędów."
+                        messagebox.showwarning(APP_TITLE, summary + "\\n\\nSzczegóły błędów:\\n" + details + log_note)
+                    else:
+                        messagebox.showinfo(APP_TITLE, summary)
                 elif msg[0] == "done":
                     _, rows, inventory, total, ok, error, cancelled = msg
                     self.progress.configure(value=0)
